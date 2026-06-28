@@ -91,23 +91,40 @@ only after editing `rust/`, from a clone of this library repo:
 
 ## Try it
 Scan with the **nRF Connect** mobile app for `RUNTIME-BLE`, connect, find the
-Nordic UART Service (`6e400001-…`), enable notifications on TX (`6e400003`), and
-write bytes to RX (`6e400002`) — the example echoes them back on TX.
+example's custom vendor service (`e54c0001-…`), enable notifications on TX
+(`e54c0003`), and write bytes to RX (`e54c0002`) — they are echoed back on TX.
 
-## API
+## API — everything is configured from C
+The GATT layout and the advertising/GAP parameters are all set in
+`runtime_ble_config_t` — no Rust rebuild needed to define your own services.
 ```c
-runtime_ble_init(&cfg);   // device name, manufacturer id, callbacks
-runtime_ble_load();       // bring radio up, advertise (fast 30-60 ms)
-runtime_ble_send(buf, n); // notify the connected central
-runtime_ble_unload();     // tear down, free all session RAM
+/* Declare your GATT (or leave services NULL for a built-in NUS). */
+static const runtime_ble_char_def_t chrs[] = {
+    { rx_uuid, 16, RUNTIME_BLE_PROP_WRITE | RUNTIME_BLE_PROP_WRITE_NR, 244 },
+    { tx_uuid, 16, RUNTIME_BLE_PROP_NOTIFY, 244 },
+};
+static const runtime_ble_service_def_t svcs[] = {
+    { svc_uuid, 16, chrs, 2 },
+};
+static const runtime_ble_config_t cfg = {
+    .device_name = "RUNTIME-BLE", .manufacturer_id = 0xFFFF,
+    .adv_interval_min_ms = 30, .adv_interval_max_ms = 60,
+    .services = svcs, .num_services = 1,
+    .callbacks = { .on_write = on_write, .on_connected = on_conn, ... },
+};
+runtime_ble_init(&cfg);
+runtime_ble_load();              // bring radio up + advertise
+runtime_ble_notify(1, buf, n);   // notify characteristic #1 (TX)
+runtime_ble_unload();            // tear down, free session RAM
 ```
-`cfg.callbacks`: `on_connected`, `on_disconnected`, `on_data` (RX bytes),
-`on_log`. Callbacks run on the BLE runtime thread — keep them short.
+Characteristics are addressed by **flat index** (declaration order). Callbacks:
+`on_connected`, `on_disconnected`, `on_write(chr, …)` (or `on_data` for the
+built-in NUS RX), `on_log`. They run on the BLE thread — keep them short.
 
 ## Adding a chip
 1. Add a `<chip> = ["_radio", "embassy-nrf/<chip>", "nrf-sdc/<chip>"]` feature
    in `rust/Cargo.toml`.
-2. Implement `rust/src/chip/<chip>.rs` (`Irqs` + `runtime_irq_*` shims +
-   `build_sdc` + `run`) — use `chip/nrf54l15.rs` as the template.
+2. Reuse a family bring-up (`rust/src/chip/nrf54l.rs` or `nrf52.rs`) or add one
+   (`Irqs` + `runtime_irq_*` shims + `build_sdc` + `run`).
 3. Add the matching IRQ branch in `glue/glue.c` and the SoC case in `CMakeLists.txt`.
 4. `.\scripts\build_lib.ps1 -Chip <chip>` and add `examples/<board>/`.
