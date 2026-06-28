@@ -19,7 +19,7 @@ extern crate alloc;
 
 use core::alloc::{GlobalAlloc, Layout};
 use core::ffi::{c_char, c_int, c_void};
-use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
 
 // ---- Zephyr-provided externs (resolved when linked into the Zephyr image) ----
 extern "C" {
@@ -70,6 +70,17 @@ pub struct RuntimeBleCallbacks {
     pub on_data: Option<extern "C" fn(data: *const u8, len: usize, user: *mut c_void)>,
     /// Peer wrote to a user-defined characteristic `chr` (flat index).
     pub on_write: Option<extern "C" fn(chr: u16, data: *const u8, len: usize, user: *mut c_void)>,
+    /// Central: a scan advertising report (addr is 6 bytes, LSB first).
+    pub on_scan_result:
+        Option<extern "C" fn(addr: *const u8, rssi: i8, adv: *const u8, adv_len: usize, user: *mut c_void)>,
+    /// Central: a characteristic found by runtime_ble_client_discover.
+    pub on_discovered:
+        Option<extern "C" fn(handle: u16, uuid: *const u8, uuid_len: u8, props: u16, user: *mut c_void)>,
+    /// Central: value returned by runtime_ble_client_read.
+    pub on_read: Option<extern "C" fn(handle: u16, data: *const u8, len: usize, user: *mut c_void)>,
+    /// Central: a notification/indication from a subscribed characteristic.
+    pub on_notification:
+        Option<extern "C" fn(handle: u16, data: *const u8, len: usize, user: *mut c_void)>,
     /// Optional NUL-terminated text log line for the app's console.
     pub on_log: Option<extern "C" fn(line: *const c_char, user: *mut c_void)>,
 }
@@ -117,6 +128,10 @@ pub struct RuntimeBleConfig {
     /// User-defined GATT (null/0 -> built-in NUS). Built at load time.
     pub services: *const RuntimeBleServiceDef,
     pub num_services: u8,
+    /// Role: 0 = peripheral (default), 1 = central. See RUNTIME_BLE_ROLE_*.
+    pub role: u8,
+    /// Central only: optional 6-byte peer to auto-connect on load (null -> none).
+    pub peer_address: *const u8,
     pub callbacks: RuntimeBleCallbacks,
     pub user: *mut c_void,
 }
@@ -134,6 +149,8 @@ pub(crate) struct RuntimeCfg {
     pub address: *const u8,
     pub services: *const RuntimeBleServiceDef,
     pub num_services: u8,
+    pub role: u8,
+    pub peer_address: *const u8,
     pub callbacks: RuntimeBleCallbacks,
     pub user: *mut c_void,
 }
@@ -152,6 +169,26 @@ pub(crate) static mut SEND_BUF: [u8; SEND_BUF_CAP] = [0; SEND_BUF_CAP];
 pub(crate) static SEND_CHR: AtomicUsize = AtomicUsize::new(NUS_TX_CHR);
 /// Sentinel meaning "the built-in NUS TX characteristic".
 pub(crate) const NUS_TX_CHR: usize = usize::MAX;
+
+// ---- Central command channel (single outstanding; consumed by the central loop) ----
+pub(crate) const CCMD_NONE: u32 = 0;
+pub(crate) const CCMD_SCAN_START: u32 = 1;
+pub(crate) const CCMD_SCAN_STOP: u32 = 2;
+pub(crate) const CCMD_CONNECT: u32 = 3;
+pub(crate) const CCMD_DISCONNECT: u32 = 4;
+pub(crate) const CCMD_DISCOVER: u32 = 5;
+pub(crate) const CCMD_READ: u32 = 6;
+pub(crate) const CCMD_WRITE: u32 = 7;
+pub(crate) const CCMD_SUBSCRIBE: u32 = 8;
+pub(crate) static CENTRAL_CMD: AtomicU32 = AtomicU32::new(CCMD_NONE);
+/// Attribute handle (read/write/subscribe) for the pending command.
+pub(crate) static CENTRAL_HANDLE: AtomicU32 = AtomicU32::new(0);
+/// 6-byte peer address for CCMD_CONNECT.
+pub(crate) static mut CENTRAL_ADDR: [u8; 6] = [0; 6];
+/// Service UUID (LE) + length for CCMD_DISCOVER.
+pub(crate) static mut CENTRAL_UUID: [u8; 16] = [0; 16];
+pub(crate) static CENTRAL_UUID_LEN: AtomicUsize = AtomicUsize::new(0);
+// CCMD_WRITE payload reuses SEND_BUF / SEND_LEN (a session is one role only).
 
 const RUNTIME_BLE_OK: c_int = 0;
 const RUNTIME_BLE_ERR_INVALID: c_int = -1;
@@ -176,6 +213,8 @@ pub extern "C" fn runtime_ble_init(cfg: *const RuntimeBleConfig) -> c_int {
             address: c.address,
             services: c.services,
             num_services: c.num_services,
+            role: c.role,
+            peer_address: c.peer_address,
             callbacks: c.callbacks,
             user: c.user,
         });
@@ -218,6 +257,110 @@ pub extern "C" fn runtime_ble_send(data: *const u8, len: usize) -> c_int {
 #[no_mangle]
 pub extern "C" fn runtime_ble_notify(chr: u16, data: *const u8, len: usize) -> c_int {
     queue_tx(chr as usize, data, len)
+}
+
+// ---- Central / GATT client API ----
+// The functions exist in every build (stable C ABI). Without the `central`
+// feature they return RUNTIME_BLE_ERR_INVALID; with it they queue one command
+// for the central session loop (see radio.rs).
+
+/// Queue a parameter-less central command if no command is outstanding.
+fn central_cmd(cmd: u32, handle: u32) -> c_int {
+    #[cfg(feature = "central")]
+    {
+        if CENTRAL_CMD.load(Ordering::Acquire) != CCMD_NONE {
+            return RUNTIME_BLE_ERR_NO_MEM;
+        }
+        CENTRAL_HANDLE.store(handle, Ordering::Release);
+        CENTRAL_CMD.store(cmd, Ordering::Release);
+        RUNTIME_BLE_OK
+    }
+    #[cfg(not(feature = "central"))]
+    {
+        let _ = (cmd, handle);
+        RUNTIME_BLE_ERR_INVALID
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn runtime_ble_scan_start() -> c_int {
+    central_cmd(CCMD_SCAN_START, 0)
+}
+#[no_mangle]
+pub extern "C" fn runtime_ble_scan_stop() -> c_int {
+    central_cmd(CCMD_SCAN_STOP, 0)
+}
+#[no_mangle]
+pub extern "C" fn runtime_ble_connect(addr: *const u8) -> c_int {
+    #[cfg(feature = "central")]
+    {
+        if addr.is_null() {
+            return RUNTIME_BLE_ERR_INVALID;
+        }
+        unsafe {
+            core::ptr::copy_nonoverlapping(addr, core::ptr::addr_of_mut!(CENTRAL_ADDR) as *mut u8, 6);
+        }
+        central_cmd(CCMD_CONNECT, 0)
+    }
+    #[cfg(not(feature = "central"))]
+    {
+        let _ = addr;
+        RUNTIME_BLE_ERR_INVALID
+    }
+}
+#[no_mangle]
+pub extern "C" fn runtime_ble_disconnect() -> c_int {
+    central_cmd(CCMD_DISCONNECT, 0)
+}
+#[no_mangle]
+pub extern "C" fn runtime_ble_client_discover(uuid: *const u8, uuid_len: u8) -> c_int {
+    #[cfg(feature = "central")]
+    {
+        if uuid.is_null() || (uuid_len != 2 && uuid_len != 16) {
+            return RUNTIME_BLE_ERR_INVALID;
+        }
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                uuid,
+                core::ptr::addr_of_mut!(CENTRAL_UUID) as *mut u8,
+                uuid_len as usize,
+            );
+        }
+        CENTRAL_UUID_LEN.store(uuid_len as usize, Ordering::Release);
+        central_cmd(CCMD_DISCOVER, 0)
+    }
+    #[cfg(not(feature = "central"))]
+    {
+        let _ = (uuid, uuid_len);
+        RUNTIME_BLE_ERR_INVALID
+    }
+}
+#[no_mangle]
+pub extern "C" fn runtime_ble_client_read(handle: u16) -> c_int {
+    central_cmd(CCMD_READ, handle as u32)
+}
+#[no_mangle]
+pub extern "C" fn runtime_ble_client_write(handle: u16, data: *const u8, len: usize) -> c_int {
+    #[cfg(feature = "central")]
+    {
+        if data.is_null() || len == 0 || len > SEND_BUF_CAP {
+            return RUNTIME_BLE_ERR_INVALID;
+        }
+        unsafe {
+            core::ptr::copy_nonoverlapping(data, core::ptr::addr_of_mut!(SEND_BUF) as *mut u8, len);
+        }
+        SEND_LEN.store(len, Ordering::Release);
+        central_cmd(CCMD_WRITE, handle as u32)
+    }
+    #[cfg(not(feature = "central"))]
+    {
+        let _ = (handle, data, len);
+        RUNTIME_BLE_ERR_INVALID
+    }
+}
+#[no_mangle]
+pub extern "C" fn runtime_ble_client_subscribe(handle: u16) -> c_int {
+    central_cmd(CCMD_SUBSCRIBE, handle as u32)
 }
 
 /// Run ONE BLE session. Allocates everything on the heap, runs until

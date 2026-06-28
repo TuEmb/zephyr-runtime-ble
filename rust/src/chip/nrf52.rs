@@ -20,10 +20,18 @@ use nrf_sdc::{self as sdc, mpsl};
 use trouble_host::prelude::*;
 
 use super::{device_address, log, serve_session, Resources};
+#[cfg(feature = "central")]
+use super::serve_central;
 use crate::RuntimeCfg;
 
 const L2CAP_TXQ: u8 = 4;
 const L2CAP_RXQ: u8 = 4;
+
+// SoftDevice Controller memory pool; the central role needs more.
+#[cfg(not(feature = "central"))]
+const SDC_MEM: usize = 8192;
+#[cfg(feature = "central")]
+const SDC_MEM: usize = 12288;
 
 #[derive(Clone, Copy)]
 pub(super) struct Irqs;
@@ -60,20 +68,28 @@ fn build_sdc<'d, const N: usize>(
     mpsl: &'d MultiprotocolServiceLayer,
     mem: &'d mut sdc::Mem<N>,
 ) -> Result<nrf_sdc::SoftdeviceController<'d>, nrf_sdc::Error> {
-    sdc::Builder::new()?
+    let b = sdc::Builder::new()?
         .support_adv()
         .support_peripheral()
         .support_le_2m_phy()
         .support_phy_update_peripheral()
-        .support_dle_peripheral()
-        .peripheral_count(1)?
-        .buffer_cfg(
-            DefaultPacketPool::MTU as u16,
-            DefaultPacketPool::MTU as u16,
-            L2CAP_TXQ,
-            L2CAP_RXQ,
-        )?
-        .build(p, rng, mpsl, mem)
+        .support_dle_peripheral();
+    #[cfg(feature = "central")]
+    let b = b
+        .support_scan()
+        .support_central()
+        .support_phy_update_central()
+        .support_dle_central();
+    let b = b.peripheral_count(1)?;
+    #[cfg(feature = "central")]
+    let b = b.central_count(1)?;
+    b.buffer_cfg(
+        DefaultPacketPool::MTU as u16,
+        DefaultPacketPool::MTU as u16,
+        L2CAP_TXQ,
+        L2CAP_RXQ,
+    )?
+    .build(p, rng, mpsl, mem)
 }
 
 pub(crate) fn run(cfg: Option<&'static RuntimeCfg>, _mode: c_int) {
@@ -101,7 +117,7 @@ pub(crate) fn run(cfg: Option<&'static RuntimeCfg>, _mode: c_int) {
         p.PPI_CH25, p.PPI_CH26, p.PPI_CH27, p.PPI_CH28, p.PPI_CH29,
     );
     let rng_ptr = Box::into_raw(Box::new(rng::Rng::new_blocking(p.RNG)));
-    let mem_ptr = Box::into_raw(Box::new(sdc::Mem::<8192>::new()));
+    let mem_ptr = Box::into_raw(Box::new(sdc::Mem::<SDC_MEM>::new()));
     let sdc = build_sdc(sdc_p, unsafe { &mut *rng_ptr }, mpsl, unsafe { &mut *mem_ptr }).unwrap();
 
     let res_ptr: *mut Resources = Box::into_raw(Box::new(HostResources::new()));
@@ -110,7 +126,14 @@ pub(crate) fn run(cfg: Option<&'static RuntimeCfg>, _mode: c_int) {
         .set_io_capabilities(IoCapabilities::NoInputNoOutput)
         .build();
 
-    log(cfg, c"[runtime-ble] loaded on heap; advertising");
+    log(cfg, c"[runtime-ble] loaded on heap");
+    #[cfg(feature = "central")]
+    if cfg.role == 1 {
+        serve_central(mpsl, &stack, cfg);
+    } else {
+        serve_session(mpsl, &stack, cfg);
+    }
+    #[cfg(not(feature = "central"))]
     serve_session(mpsl, &stack, cfg);
 
     drop(stack);

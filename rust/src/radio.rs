@@ -17,6 +17,8 @@ use core::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 
 use embassy_futures::join::join;
 use embassy_futures::select::select;
+#[cfg(feature = "central")]
+use embassy_futures::select::select3;
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_time::{Duration, Timer};
 use embassy_time_driver::Driver;
@@ -24,10 +26,20 @@ use embassy_time_queue_utils::Queue;
 use nrf_sdc::mpsl::MultiprotocolServiceLayer;
 use trouble_host::attribute::{AttributeTable, Characteristic, CharacteristicProps, Service};
 use trouble_host::prelude::*;
+#[cfg(feature = "central")]
+use trouble_host::connection::{ConnectConfig, ScanConfig};
+#[cfg(feature = "central")]
+use trouble_host::gatt::GattClient;
 
 use crate::{
     RuntimeBleCharDef, RuntimeCfg, NUS_TX_CHR, SEND_BUF, SEND_BUF_CAP,
     SEND_CHR, SEND_LEN, SEND_REQ, UNLOAD_REQ,
+};
+#[cfg(feature = "central")]
+use crate::{
+    CCMD_CONNECT, CCMD_DISCONNECT, CCMD_DISCOVER, CCMD_NONE, CCMD_READ, CCMD_SCAN_START,
+    CCMD_SCAN_STOP, CCMD_SUBSCRIBE, CCMD_WRITE, CENTRAL_ADDR, CENTRAL_CMD, CENTRAL_HANDLE,
+    CENTRAL_UUID, CENTRAL_UUID_LEN,
 };
 
 // Per-chip bring-up. Exactly one chip feature is enabled; `chip::run` is the
@@ -348,6 +360,220 @@ pub(crate) fn serve_session(
 
 async fn run_runner<C: Controller, P: PacketPool>(mut runner: Runner<'_, C, P>) {
     let _ = runner.run().await;
+}
+
+// ---------------------------------------------------------------------------
+// Central role: scan/connect + GATT client. Compiled only with `--features
+// central` (the SDC central support is added in chip/<soc>.rs::build_sdc).
+// ---------------------------------------------------------------------------
+#[cfg(feature = "central")]
+type ClientP<'a> = GattClient<'a, nrf_sdc::SoftdeviceController<'static>, DefaultPacketPool, 4>;
+
+/// One central session: connect (by config.peer_address or a queued connect
+/// command), run a GATT client until disconnect/unload, repeat.
+#[cfg(feature = "central")]
+pub(crate) fn serve_central(
+    mpsl: &MultiprotocolServiceLayer,
+    stack: &Stack<'_, nrf_sdc::SoftdeviceController<'static>, DefaultPacketPool>,
+    cfg: &RuntimeCfg,
+) {
+    block_on(select(mpsl.run(), central_loop(stack, cfg)));
+}
+
+#[cfg(feature = "central")]
+async fn central_loop(
+    stack: &Stack<'_, nrf_sdc::SoftdeviceController<'static>, DefaultPacketPool>,
+    cfg: &RuntimeCfg,
+) {
+    let mut central = stack.central();
+    let mut auto = !cfg.peer_address.is_null();
+
+    loop {
+        if UNLOAD_REQ.load(Ordering::Acquire) {
+            return;
+        }
+        let addr = if auto {
+            auto = false;
+            let mut a = [0u8; 6];
+            unsafe { core::ptr::copy_nonoverlapping(cfg.peer_address, a.as_mut_ptr(), 6) };
+            a
+        } else {
+            match wait_connect_cmd().await {
+                Some(a) => a,
+                None => return, // unloaded
+            }
+        };
+
+        let filt = [Address::random(addr)];
+        let cc = ConnectConfig {
+            scan_config: ScanConfig {
+                filter_accept_list: &filt,
+                ..Default::default()
+            },
+            connect_params: Default::default(),
+        };
+        log_str(cfg, "[central] connecting\0");
+        match central.connect(&cc).await {
+            Ok(conn) => {
+                if let Some(cb) = cfg.callbacks.on_connected {
+                    cb(cfg.user);
+                }
+                client_session(stack, &conn, cfg).await;
+                if let Some(cb) = cfg.callbacks.on_disconnected {
+                    cb(0, cfg.user);
+                }
+            }
+            Err(_) => {
+                log_str(cfg, "[central] connect failed\0");
+                Timer::after(Duration::from_secs(1)).await;
+            }
+        }
+    }
+}
+
+/// Park (polling) until a CCMD_CONNECT is queued; returns its target address.
+#[cfg(feature = "central")]
+async fn wait_connect_cmd() -> Option<[u8; 6]> {
+    loop {
+        if UNLOAD_REQ.load(Ordering::Acquire) {
+            return None;
+        }
+        let cmd = CENTRAL_CMD.load(Ordering::Acquire);
+        if cmd == CCMD_CONNECT {
+            CENTRAL_CMD.store(CCMD_NONE, Ordering::Release);
+            let mut a = [0u8; 6];
+            unsafe {
+                core::ptr::copy_nonoverlapping(
+                    core::ptr::addr_of!(CENTRAL_ADDR) as *const u8,
+                    a.as_mut_ptr(),
+                    6,
+                );
+            }
+            return Some(a);
+        }
+        if cmd != CCMD_NONE {
+            // Drop commands that need an active link while idle.
+            CENTRAL_CMD.store(CCMD_NONE, Ordering::Release);
+        }
+        Timer::after(Duration::from_millis(30)).await;
+    }
+}
+
+/// Run the GATT client on `conn`: a command pump (discover/read/write/subscribe/
+/// disconnect) + a notification pump, until the link drops or unload.
+#[cfg(feature = "central")]
+async fn client_session(
+    stack: &Stack<'_, nrf_sdc::SoftdeviceController<'static>, DefaultPacketPool>,
+    conn: &Connection<'_, DefaultPacketPool>,
+    cfg: &RuntimeCfg,
+) {
+    let client = match ClientP::new(stack, conn).await {
+        Ok(c) => c,
+        Err(_) => {
+            log_str(cfg, "[central] gatt client init failed\0");
+            return;
+        }
+    };
+    let mut listener = client.listen_all().ok();
+    // Remember (value handle, CCCD handle) of discovered characteristics so
+    // subscribe() can write the right CCCD.
+    let store: RefCell<heapless::Vec<(u16, Option<u16>), 8>> = RefCell::new(heapless::Vec::new());
+
+    let commands = async {
+        loop {
+            match CENTRAL_CMD.swap(CCMD_NONE, Ordering::AcqRel) {
+                CCMD_DISCONNECT => conn.disconnect(),
+                CCMD_DISCOVER => client_discover(&client, &store, cfg).await,
+                CCMD_READ => {
+                    let h = CENTRAL_HANDLE.load(Ordering::Acquire) as u16;
+                    let mut buf = [0u8; VALUE_LEN];
+                    match client.read_handle(h, &mut buf).await {
+                        Ok(n) => {
+                            if let Some(cb) = cfg.callbacks.on_read {
+                                cb(h, buf.as_ptr(), n.min(VALUE_LEN), cfg.user);
+                            }
+                        }
+                        Err(_) => log_str(cfg, "[central] read failed\0"),
+                    }
+                }
+                CCMD_WRITE => {
+                    let h = CENTRAL_HANDLE.load(Ordering::Acquire) as u16;
+                    let len = SEND_LEN.load(Ordering::Acquire).min(VALUE_LEN).min(SEND_BUF_CAP);
+                    let mut wbuf = [0u8; VALUE_LEN];
+                    unsafe {
+                        core::ptr::copy_nonoverlapping(
+                            core::ptr::addr_of!(SEND_BUF) as *const u8,
+                            wbuf.as_mut_ptr(),
+                            len,
+                        );
+                    }
+                    let _ = client.write_handle(h, &wbuf[..len]).await;
+                }
+                CCMD_SUBSCRIBE => {
+                    let h = CENTRAL_HANDLE.load(Ordering::Acquire) as u16;
+                    let cccd = store
+                        .borrow()
+                        .iter()
+                        .find(|(handle, _)| *handle == h)
+                        .and_then(|(_, cccd)| *cccd)
+                        .unwrap_or(h + 1);
+                    let _ = client.write_handle(cccd, &[0x01, 0x00]).await;
+                }
+                CCMD_SCAN_START | CCMD_SCAN_STOP => {
+                    log_str(cfg, "[central] scan not implemented in this build\0")
+                }
+                _ => {}
+            }
+            Timer::after(Duration::from_millis(20)).await;
+        }
+    };
+
+    let notifs = async {
+        match listener.as_mut() {
+            Some(l) => loop {
+                let n = l.next().await;
+                if let Some(cb) = cfg.callbacks.on_notification {
+                    let d = n.as_ref();
+                    cb(n.handle(), d.as_ptr(), d.len(), cfg.user);
+                }
+            },
+            None => core::future::pending::<()>().await,
+        }
+    };
+
+    // client.task() drives ATT responses + notifications; it returns when the
+    // link drops, ending the session.
+    select3(client.task(), join(commands, notifs), wait_unload()).await;
+}
+
+/// Discover the characteristics of the service whose UUID is in CENTRAL_UUID;
+/// report each via on_discovered and remember them (for subscribe's CCCD).
+#[cfg(feature = "central")]
+async fn client_discover(
+    client: &ClientP<'_>,
+    store: &RefCell<heapless::Vec<(u16, Option<u16>), 8>>,
+    cfg: &RuntimeCfg,
+) {
+    let len = CENTRAL_UUID_LEN.load(Ordering::Acquire);
+    let uuid = unsafe { uuid_from(core::ptr::addr_of!(CENTRAL_UUID) as *const u8, len as u8) };
+    let svcs = match client.services_by_uuid(&uuid).await {
+        Ok(s) => s,
+        Err(_) => {
+            log_str(cfg, "[central] discover: service not found\0");
+            return;
+        }
+    };
+    for s in svcs.iter() {
+        if let Ok(chars) = client.characteristics::<8>(s).await {
+            for c in chars.iter() {
+                let _ = store.borrow_mut().push((c.handle, c.cccd_handle));
+                if let Some(cb) = cfg.callbacks.on_discovered {
+                    let raw = c.uuid.as_raw();
+                    cb(c.handle, raw.as_ptr(), raw.len() as u8, 0, cfg.user);
+                }
+            }
+        }
+    }
 }
 
 async fn wait_unload() {
