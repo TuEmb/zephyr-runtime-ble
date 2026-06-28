@@ -13,10 +13,10 @@ and `boards/<board>.conf` overlays apply any board-specific tweaks.
 | [`l2cap_central/`](l2cap_central/) | Central that opens an L2CAP channel | `libruntime_ble_central_l2cap.a` (both) |
 | [`dual/`](dual/) | **Server + client at once** (advertise/serve AND connect/query) | `libruntime_ble_central.a` (`CONFIG_RUNTIME_BLE_CENTRAL=y`) |
 
-The default lib (peripheral + GATT server) is committed for all chips, so
-`gatt_server` builds for every board out of the box. The other examples need a
-role-specific lib variant — committed for nRF54L15, build it for other chips
-with the matching Cargo feature (see [`../rust/README.md`](../rust/README.md)).
+All lib variants (base + `_central` + `_l2cap` + `_central_l2cap`) are committed
+for **every supported chip**, so every example builds for every board out of the
+box. To rebuild a variant after editing `rust/`, use the matching Cargo feature
+(see [`../rust/README.md`](../rust/README.md)).
 
 ## Build (any board)
 
