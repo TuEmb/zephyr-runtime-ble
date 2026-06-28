@@ -377,7 +377,13 @@ pub(crate) fn serve_central(
     stack: &Stack<'_, nrf_sdc::SoftdeviceController<'static>, DefaultPacketPool>,
     cfg: &RuntimeCfg,
 ) {
-    block_on(select(mpsl.run(), central_loop(stack, cfg)));
+    // The host runner must run concurrently so HCI events (connection complete,
+    // ATT responses, notifications) are processed while we connect and talk.
+    let runner = stack.runner();
+    block_on(select(
+        mpsl.run(),
+        select(run_runner(runner), central_loop(stack, cfg)),
+    ));
 }
 
 #[cfg(feature = "central")]
