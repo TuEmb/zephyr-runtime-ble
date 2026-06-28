@@ -1,17 +1,46 @@
 /*
- * runtime-ble echo example.
+ * runtime-ble example: a fully user-defined BLE peripheral.
  *
- * Brings up the loadable BLE runtime (trouble + SoftDevice Controller, the
- * radio is owned by the prebuilt Rust staticlib — note CONFIG_BT=n) and echoes
- * whatever a central writes to the RX characteristic back on TX (notify).
+ * Everything is configured from this app — no Rust rebuild:
+ *   - advertising: name, manufacturer data, interval, discoverable mode
+ *   - GATT: a custom 128-bit vendor service with an RX (write) characteristic
+ *     and a TX (notify) characteristic.
  *
- * Test with the nRF Connect mobile app: scan for "RUNTIME-BLE", connect, find
- * the Nordic UART Service (6e400001-...), enable notifications on TX
- * (6e400003), then write bytes to RX (6e400002) — they come back on TX.
+ * Behaviour: whatever a central writes to RX is echoed back as a notification
+ * on TX. Test with the nRF Connect mobile app.
  */
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>
 #include "runtime_ble.h"
+
+/* Custom 128-bit UUIDs, little-endian byte order.
+ *   service e54c0001-b5a3-f393-e0a9-e50e24dcca9e
+ *   rx      e54c0002-...   (write)
+ *   tx      e54c0003-...   (notify)
+ */
+static const uint8_t svc_uuid[16] = {0x9e, 0xca, 0xdc, 0x24, 0x0e, 0xe5, 0xa9, 0xe0,
+				     0x93, 0xf3, 0xa3, 0xb5, 0x01, 0x00, 0x4c, 0xe5};
+static const uint8_t rx_uuid[16]  = {0x9e, 0xca, 0xdc, 0x24, 0x0e, 0xe5, 0xa9, 0xe0,
+				     0x93, 0xf3, 0xa3, 0xb5, 0x02, 0x00, 0x4c, 0xe5};
+static const uint8_t tx_uuid[16]  = {0x9e, 0xca, 0xdc, 0x24, 0x0e, 0xe5, 0xa9, 0xe0,
+				     0x93, 0xf3, 0xa3, 0xb5, 0x03, 0x00, 0x4c, 0xe5};
+
+/* Flat characteristic indices, in declaration order below. */
+#define CHR_RX 0
+#define CHR_TX 1
+
+static const runtime_ble_char_def_t my_chars[] = {
+	{ .uuid = rx_uuid, .uuid_len = 16,
+	  .props = RUNTIME_BLE_PROP_WRITE | RUNTIME_BLE_PROP_WRITE_NR, .max_len = 244 },
+	{ .uuid = tx_uuid, .uuid_len = 16,
+	  .props = RUNTIME_BLE_PROP_NOTIFY, .max_len = 244 },
+};
+static const runtime_ble_service_def_t my_services[] = {
+	{ .uuid = svc_uuid, .uuid_len = 16, .chars = my_chars, .num_chars = 2 },
+};
+
+/* Demo manufacturer-specific advertising payload (after the company id). */
+static const uint8_t mfg_data[] = {0x52, 0x42, 0x01};
 
 static void on_log(const char *line, void *user)
 {
@@ -31,19 +60,17 @@ static void on_disconnected(uint8_t reason, void *user)
 	printk("[app] central disconnected (reason 0x%02x)\n", reason);
 }
 
-static void on_data(const uint8_t *data, size_t len, void *user)
+static void on_write(uint16_t chr, const uint8_t *data, size_t len, void *user)
 {
 	ARG_UNUSED(user);
-	printk("[app] rx %u bytes -> echo\n", (unsigned int)len);
-	/* Echo back. Queued here on the BLE thread; the runtime flushes it as a
-	 * TX notification while still handling this same GATT write. */
-	(void)runtime_ble_send(data, len);
+	printk("[app] write chr=%u len=%u -> echo on TX\n", chr, (unsigned int)len);
+	if (chr == CHR_RX) {
+		(void)runtime_ble_notify(CHR_TX, data, len);
+	}
 }
 
 int main(void)
 {
-	/* Demo manufacturer-specific advertising payload (after the company id). */
-	static const uint8_t mfg_data[] = {0x52, 0x42, 0x01};
 	static const runtime_ble_config_t cfg = {
 		.device_name = "RUNTIME-BLE",
 		.manufacturer_id = 0xFFFF,
@@ -53,10 +80,12 @@ int main(void)
 		.adv_interval_max_ms = 60,
 		.discoverable = 0, /* general-discoverable */
 		.address = NULL,   /* hwinfo-derived static-random address */
+		.services = my_services,
+		.num_services = 1,
 		.callbacks = {
 			.on_connected = on_connected,
 			.on_disconnected = on_disconnected,
-			.on_data = on_data,
+			.on_write = on_write,
 			.on_log = on_log,
 		},
 		.user = NULL,
@@ -65,7 +94,7 @@ int main(void)
 	uint8_t addr[6];
 
 	runtime_ble_addr(addr);
-	printk("\n[app] runtime-ble echo example\n");
+	printk("\n[app] runtime-ble custom-GATT example\n");
 	printk("[app] addr %02x:%02x:%02x:%02x:%02x:%02x\n",
 	       addr[5], addr[4], addr[3], addr[2], addr[1], addr[0]);
 
@@ -74,6 +103,6 @@ int main(void)
 		printk("[app] runtime_ble_load failed\n");
 		return 0;
 	}
-	printk("[app] loaded; advertising as \"RUNTIME-BLE\"\n");
+	printk("[app] loaded; advertising \"RUNTIME-BLE\" with a custom vendor service\n");
 	return 0;
 }
