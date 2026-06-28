@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 //! runtime-ble — a trouble-based BLE peripheral runtime exposed as a C-ABI Rust
 //! `staticlib` for linking into a Zephyr application (built with `CONFIG_BT=n`).
 //!
@@ -180,8 +181,6 @@ pub(crate) const NUS_TX_CHR: usize = usize::MAX;
 
 // ---- Central command channel (single outstanding; consumed by the central loop) ----
 pub(crate) const CCMD_NONE: u32 = 0;
-pub(crate) const CCMD_SCAN_START: u32 = 1;
-pub(crate) const CCMD_SCAN_STOP: u32 = 2;
 pub(crate) const CCMD_CONNECT: u32 = 3;
 pub(crate) const CCMD_DISCONNECT: u32 = 4;
 pub(crate) const CCMD_DISCOVER: u32 = 5;
@@ -296,14 +295,6 @@ fn central_cmd(cmd: u32, handle: u32) -> c_int {
     }
 }
 
-#[no_mangle]
-pub extern "C" fn runtime_ble_scan_start() -> c_int {
-    central_cmd(CCMD_SCAN_START, 0)
-}
-#[no_mangle]
-pub extern "C" fn runtime_ble_scan_stop() -> c_int {
-    central_cmd(CCMD_SCAN_STOP, 0)
-}
 #[no_mangle]
 pub extern "C" fn runtime_ble_connect(addr: *const u8) -> c_int {
     #[cfg(feature = "central")]

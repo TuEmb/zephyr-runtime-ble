@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: Apache-2.0 */
 /*
  * runtime_ble.h — C ABI for the trouble-based loadable BLE runtime.
  *
@@ -82,7 +83,8 @@ typedef struct {
 	void (*on_write)(uint16_t chr, const uint8_t *data, size_t len, void *user);
 
 	/* ---- Central / GATT client (lib built with the central role) ---- */
-	/* A scan advertising report (addr is 6 bytes, LSB first). */
+	/* RESERVED for a future active-scan API (not yet emitted). For now connect
+	 * by address (config.peer_address / runtime_ble_connect). */
 	void (*on_scan_result)(const uint8_t *addr, int8_t rssi,
 			       const uint8_t *adv, size_t adv_len, void *user);
 	/* A characteristic found by runtime_ble_client_discover() (uuid is LE). */
@@ -178,11 +180,10 @@ void runtime_ble_addr(uint8_t out[6]);
  * Available when the application sets config.role = RUNTIME_BLE_ROLE_CENTRAL and
  * links a central-capable staticlib (CONFIG_RUNTIME_BLE_CENTRAL=y; otherwise
  * these return RUNTIME_BLE_ERR_INVALID). Calls are queued to the runtime thread;
- * results arrive via the callbacks above. One central link at a time. */
-
-/* Start/stop scanning. Each advertising report is delivered to on_scan_result. */
-int runtime_ble_scan_start(void);
-int runtime_ble_scan_stop(void);
+ * results arrive via the callbacks above. One central link at a time.
+ *
+ * Discovery is by address (config.peer_address or runtime_ble_connect); active
+ * scanning (on_scan_result) is a planned addition and is not emitted yet. */
 
 /* Connect to a peer by address (6 bytes, LSB first). on_connected fires on success. */
 int runtime_ble_connect(const uint8_t addr[6]);

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 //! radio.rs — chip-agnostic BLE runtime: a custom `block_on` executor parked on
 //! a Zephyr semaphore, an embassy-time driver backed by the Zephyr clock, a
 //! **user-defined GATT** built at load time from the C config (or a built-in
@@ -39,9 +40,8 @@ use crate::{
 };
 #[cfg(feature = "central")]
 use crate::{
-    CCMD_CONNECT, CCMD_DISCONNECT, CCMD_DISCOVER, CCMD_NONE, CCMD_READ, CCMD_SCAN_START,
-    CCMD_SCAN_STOP, CCMD_SUBSCRIBE, CCMD_WRITE, CENTRAL_ADDR, CENTRAL_CMD, CENTRAL_HANDLE,
-    CENTRAL_UUID, CENTRAL_UUID_LEN,
+    CCMD_CONNECT, CCMD_DISCONNECT, CCMD_DISCOVER, CCMD_NONE, CCMD_READ, CCMD_SUBSCRIBE, CCMD_WRITE,
+    CENTRAL_ADDR, CENTRAL_CMD, CENTRAL_HANDLE, CENTRAL_UUID, CENTRAL_UUID_LEN,
 };
 #[cfg(feature = "l2cap")]
 use crate::{L2CAP_SEND_BUF, L2CAP_SEND_LEN, L2CAP_SEND_REQ};
@@ -190,6 +190,29 @@ fn map_props(props: u16) -> CharacteristicProps {
         b |= 0x20; // Indicate
     }
     CharacteristicProps::from(b)
+}
+
+// Reverse of map_props: BLE CharacteristicProp bits -> C property bits, for
+// reporting a discovered characteristic's properties to on_discovered.
+#[cfg(feature = "central")]
+fn props_to_c(ble: u8) -> u16 {
+    let mut p: u16 = 0;
+    if ble & 0x02 != 0 {
+        p |= C_PROP_READ;
+    }
+    if ble & 0x04 != 0 {
+        p |= C_PROP_WRITE_NR;
+    }
+    if ble & 0x08 != 0 {
+        p |= C_PROP_WRITE;
+    }
+    if ble & 0x10 != 0 {
+        p |= C_PROP_NOTIFY;
+    }
+    if ble & 0x20 != 0 {
+        p |= C_PROP_INDICATE;
+    }
+    p
 }
 
 unsafe fn uuid_from(ptr: *const u8, len: u8) -> Uuid {
@@ -640,9 +663,6 @@ async fn client_session(
                         .unwrap_or(h + 1);
                     let _ = client.write_handle(cccd, &[0x01, 0x00]).await;
                 }
-                CCMD_SCAN_START | CCMD_SCAN_STOP => {
-                    log_str(cfg, "[central] scan not implemented in this build\0")
-                }
                 _ => {}
             }
             Timer::after(Duration::from_millis(20)).await;
@@ -690,7 +710,7 @@ async fn client_discover(
                 let _ = store.borrow_mut().push((c.handle, c.cccd_handle));
                 if let Some(cb) = cfg.callbacks.on_discovered {
                     let raw = c.uuid.as_raw();
-                    cb(c.handle, raw.as_ptr(), raw.len() as u8, 0, cfg.user);
+                    cb(c.handle, raw.as_ptr(), raw.len() as u8, props_to_c(c.props.to_raw()), cfg.user);
                 }
             }
         }
