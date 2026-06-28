@@ -101,7 +101,8 @@ int runtime_ble_load(void)
 	}
 	k_sem_reset(&runtime_sem);
 
-#if defined(CONFIG_SOC_SERIES_NRF54L) || defined(CONFIG_SOC_SERIES_NRF54LM20)
+#if defined(CONFIG_SOC_SERIES_NRF54L) || defined(CONFIG_SOC_SERIES_NRF54LX) || \
+	defined(CONFIG_SOC_SERIES_NRF54LM20)
 	/* Enable the MPSL IRQs only for the lifetime of a session. */
 	irq_enable(RADIO_0_IRQn);
 	irq_enable(TIMER10_IRQn);
@@ -132,7 +133,8 @@ int runtime_ble_unload(void)
 	runtime_ble_wake(); /* unblock block_on so it re-polls and sees the unload */
 	k_thread_join(&runtime_thread, K_FOREVER);
 
-#if defined(CONFIG_SOC_SERIES_NRF54L) || defined(CONFIG_SOC_SERIES_NRF54LM20)
+#if defined(CONFIG_SOC_SERIES_NRF54L) || defined(CONFIG_SOC_SERIES_NRF54LX) || \
+	defined(CONFIG_SOC_SERIES_NRF54LM20)
 	irq_disable(RADIO_0_IRQn);
 	irq_disable(TIMER10_IRQn);
 	irq_disable(GRTC_3_IRQn);
@@ -151,7 +153,8 @@ int runtime_ble_unload(void)
 }
 
 /* radio/MPSL interrupt shims (defined in Rust, per chip) */
-#if defined(CONFIG_SOC_SERIES_NRF54L) || defined(CONFIG_SOC_SERIES_NRF54LM20)
+#if defined(CONFIG_SOC_SERIES_NRF54L) || defined(CONFIG_SOC_SERIES_NRF54LX) || \
+	defined(CONFIG_SOC_SERIES_NRF54LM20)
 extern void runtime_irq_radio(void);
 extern void runtime_irq_timer10(void);
 extern void runtime_irq_grtc3(void);
@@ -168,7 +171,8 @@ static int runtime_glue_init(void)
 	k_sem_init(&runtime_sem, 0, 1);
 	k_timer_init(&runtime_timer, runtime_timer_cb, NULL);
 
-#if defined(CONFIG_SOC_SERIES_NRF54L) || defined(CONFIG_SOC_SERIES_NRF54LM20)
+#if defined(CONFIG_SOC_SERIES_NRF54L) || defined(CONFIG_SOC_SERIES_NRF54LX) || \
+	defined(CONFIG_SOC_SERIES_NRF54LM20)
 	/* CLOCK_POWER is owned by Zephyr's clock driver — ceded. Static vector
 	 * entries only; enabled per-session in runtime_ble_load. */
 	IRQ_CONNECT(RADIO_0_IRQn, 0, runtime_irq_radio, NULL, 0);
