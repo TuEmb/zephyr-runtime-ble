@@ -34,7 +34,7 @@ runtime-ble/
 │       ├── lib.rs           C ABI + heap allocator + panic
 │       ├── radio.rs         chip-agnostic: executor, runtime GATT, advertise loop
 │       └── chip/<soc>.rs    per-chip MPSL/SDC + interrupt bring-up
-└── examples/<board>/        example apps
+└── examples/<feature>/      example apps (gatt_server, gatt_client, l2cap_*)
 ```
 
 ## Board support
@@ -68,22 +68,24 @@ Notes:
 - **LLVM/clang** (for the nrf-sdc/nrf-mpsl bindgen step).
 
 ### 2. Examples are standalone west apps (no `-DZEPHYR_EXTRA_MODULES`)
-Each `examples/<chip>/` is an **independent application** with its own
-[`west.yml`](examples/nrf54l15/west.yml) that pulls **Zephyr + the
-`zephyr-runtime-ble` module via git**. west auto-discovers runtime-ble as a Zephyr
-module (it has `zephyr/module.yml`), so nothing is passed on the command line.
+The [`examples/`](examples/) are organized **by feature** (`gatt_server`,
+`gatt_client`, `l2cap_peripheral`, `l2cap_central`) and each builds for **any
+supported board**. Every example is an independent application with its own
+`west.yml` that pulls **Zephyr + the `zephyr-runtime-ble` module via git**; west
+auto-discovers runtime-ble as a Zephyr module (it has `zephyr/module.yml`), so
+nothing is passed on the command line. See [`examples/README.md`](examples/README.md).
 
-Use an example as its own git repo (e.g. copy `examples/nrf54l15` out), then:
+Use an example as its own git repo (e.g. copy `examples/gatt_server` out), then:
 ```sh
-west init -l nrf54l15      # the example dir is the manifest repo
+west init -l gatt_server   # the example dir is the manifest repo
 west update                # clones the pinned Zephyr + zephyr-runtime-ble (+ its prebuilt libs)
 west zephyr-export
-west build -p always -b xiao_nrf54l15/nrf54l15/cpuapp nrf54l15
+west build -p always -b xiao_nrf54l15/nrf54l15/cpuapp gatt_server
 west flash
 ```
 > Board per chip: see the table above (e.g. `nrf54l15dk/nrf54l10/cpuapp`, `nrf52840dk/nrf52840`).
+> Board-specific config (nRF52 hard-float etc.) is applied from the example's `boards/<board>.conf`.
 > With a `gnuarmemb` toolchain add `-- -DZEPHYR_TOOLCHAIN_VARIANT=gnuarmemb -DGNUARMEMB_TOOLCHAIN_PATH=<dir>`.
-> Pin the runtime-ble version with the `revision:` in the example's `west.yml`.
 
 ### 3. (Re)building the per-chip staticlib
 The prebuilt `lib/<chip>/libruntime_ble.a` is committed (so `west update` brings it). Rebuild it
@@ -134,7 +136,7 @@ runtime_ble_client_subscribe(handle);   // -> on_notification(handle, …)
 runtime_ble_client_write(handle, buf, n);
 runtime_ble_client_read(handle);        // -> on_read(handle, …)
 ```
-See [`examples/nrf54l15_central/`](examples/nrf54l15_central/) (HW-verified
+See [`examples/gatt_client/`](examples/gatt_client/) (HW-verified
 against the peripheral echo example). The role is feature-gated so peripheral-
 only apps stay on the lean default lib (see [`rust/README.md`](rust/README.md)).
 
@@ -144,4 +146,4 @@ only apps stay on the lean default lib (see [`rust/README.md`](rust/README.md)).
 2. Reuse a family bring-up (`rust/src/chip/nrf54l.rs` or `nrf52.rs`) or add one
    (`Irqs` + `runtime_irq_*` shims + `build_sdc` + `run`).
 3. Add the matching IRQ branch in `glue/glue.c` and the SoC case in `CMakeLists.txt`.
-4. Build the staticlib ([`rust/README.md`](rust/README.md)) and add `examples/<board>/`.
+4. Build the staticlib ([`rust/README.md`](rust/README.md)); the feature examples build for it once its prebuilt lib exists.

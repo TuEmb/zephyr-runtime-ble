@@ -1,0 +1,29 @@
+# Standalone west manifest for the runtime-ble GATT-client (central) example.
+# Build for any supported board (a central-capable lib must exist for it):
+#
+#   west init -l gatt_client
+#   west update              # clones Zephyr + zephyr-runtime-ble
+#   west build -b <board> gatt_client
+#   west flash
+manifest:
+  remotes:
+    - name: zephyrproject
+      url-base: https://github.com/zephyrproject-rtos
+    - name: tuemb
+      url-base: https://github.com/TuEmb
+
+  projects:
+    # Not tied to a Zephyr version: the module uses only stable APIs + a prebuilt
+    # staticlib (verified on 4.1.x-4.4.x). This is just the release this example
+    # pins -- change it to whatever you build against.
+    - name: zephyr
+      remote: zephyrproject
+      revision: v4.4.1
+      import: true
+    - name: zephyr-runtime-ble
+      remote: tuemb
+      revision: main
+      path: modules/zephyr-runtime-ble
+
+  self:
+    path: gatt_client
