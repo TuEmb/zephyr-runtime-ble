@@ -1,0 +1,4 @@
+name: runtime-ble
+build:
+  cmake: .
+  kconfig: Kconfig

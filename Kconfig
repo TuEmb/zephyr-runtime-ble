@@ -1,0 +1,42 @@
+menuconfig RUNTIME_BLE
+	bool "runtime-ble: trouble-based loadable BLE runtime (prebuilt staticlib)"
+	default n
+	depends on !BT
+	select DYNAMIC_THREAD
+	select DYNAMIC_THREAD_ALLOC
+	select DYNAMIC_INTERRUPTS
+	select HWINFO
+	help
+	  trouble (Rust) BLE host + nRF SoftDevice Controller, packaged as a per-chip
+	  prebuilt staticlib (lib/<chip>/libruntime_ble.a) plus the Zephyr glue
+	  (glue/glue.c). It exposes a generic Nordic-UART-style GATT peripheral
+	  (RX write + TX notify) via a small C API (include/runtime_ble.h).
+
+	  The library OWNS the radio, so the application MUST build with CONFIG_BT=n
+	  and CONFIG_MPSL=n (enforced by `depends on !BT`). Runtime state is
+	  heap-allocated on runtime_ble_load() and freed on runtime_ble_unload(), so
+	  it costs ~no RAM until loaded. Set CONFIG_HEAP_MEM_POOL_SIZE large enough to
+	  hold one session (~40 KB incl. the dynamic thread stack), and select the
+	  dynamic-stack-from-heap strategy with CONFIG_DYNAMIC_THREAD_PREFER_ALLOC=y
+	  (a choice symbol, so it must be set in the application prj.conf).
+
+if RUNTIME_BLE
+
+config RUNTIME_BLE_THREAD_STACK_SIZE
+	int "BLE runtime thread stack size (bytes)"
+	default 32768
+	range 16384 65536
+	help
+	  Dynamic stack (k_thread_stack_alloc) for the thread that runs the trouble
+	  async host. Steady-state high-water is ~14 KB, but the MPSL/SDC C-library
+	  init transient is deeper: 32768 is reliable, 24576 is the tested minimum.
+	  Allocated from the heap on load, freed on unload.
+
+config RUNTIME_BLE_THREAD_PRIORITY
+	int "BLE runtime thread priority"
+	default 5
+	range 0 15
+	help
+	  Preemptible priority (K_PRIO_PREEMPT) for the BLE runtime thread.
+
+endif # RUNTIME_BLE

@@ -1,0 +1,10 @@
+# Rust build artifacts
+rust/target/
+
+# Zephyr build dirs
+build/
+examples/*/build/
+
+# Editor / OS
+*.swp
+.DS_Store

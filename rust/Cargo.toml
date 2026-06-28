@@ -1,0 +1,79 @@
+[package]
+name = "runtime-ble"
+version = "0.1.0"
+edition = "2021"
+description = "trouble-based loadable BLE runtime as a Rust staticlib for Zephyr (CONFIG_BT=n)"
+
+[lib]
+name = "runtime_ble"
+crate-type = ["staticlib"]
+
+[dependencies]
+# trouble BLE host (no_std). Fork with caller-owned GATT value storage (a
+# rebuildable server without StaticCell), same revision proven on nRF54L15.
+trouble-host = { git = "https://github.com/TuEmb/trouble.git", rev = "d03f2f537f2741b21154b7cae65c0ec89c01063c", features = ["derive", "gatt", "security"] }
+# generic-queue: our custom block_on isn't the embassy executor, so the timer
+# queue must be the standalone (generic) variant, not the integrated one.
+embassy-time = { version = "0.5", features = ["tick-hz-1_000", "generic-queue-8"] }
+embassy-sync = { version = "0.8" }
+embassy-futures = "0.1.1"
+heapless = "0.9"
+embedded-io-async = "0.7"
+bt-hci = { version = "0.9", default-features = false }
+# Pin: fixed 1.31 needs rustc 1.93; we build with rustc 1.92.
+fixed = "=1.30.0"
+
+# Radio bring-up (controller + executor + custom time driver). Pulled in by a
+# per-chip feature below, so the FFI/allocator core compiles standalone.
+embassy-executor = { version = "0.10", default-features = false, features = ["platform-cortex-m", "executor-thread"], optional = true }
+embassy-nrf = { version = "0.10", default-features = false, features = ["gpiote", "unstable-pac"], optional = true }
+nrf-sdc = { version = "0.4", default-features = false, features = ["peripheral", "central"], optional = true }
+nrf-mpsl = { version = "0.3", default-features = false, features = ["critical-section-impl"], optional = true }
+embassy-time-driver = { version = "0.2", optional = true }
+embassy-time-queue-utils = { version = "0.3", optional = true }
+critical-section = { version = "1.2", optional = true }
+
+[features]
+default = []
+# Common radio dependencies, shared by every chip feature below.
+_radio = [
+    "dep:embassy-executor",
+    "dep:embassy-nrf",
+    "dep:nrf-sdc",
+    "dep:nrf-mpsl",
+    "dep:embassy-time-driver",
+    "dep:embassy-time-queue-utils",
+    "dep:critical-section",
+]
+# Per-chip features select the embassy-nrf + nrf-sdc chip support. Build with
+# exactly ONE of these (it picks the target SoC's radio/clock peripherals + IRQs).
+# nRF54L family (Cortex-M33, thumbv8m.main-none-eabi) — shared bring-up chip/nrf54l.rs.
+nrf54l15  = ["_radio", "embassy-nrf/nrf54l15-app-s",  "nrf-sdc/nrf54l15-app-s"]
+nrf54l10  = ["_radio", "embassy-nrf/nrf54l10-app-s",  "nrf-sdc/nrf54l10-app-s"]
+nrf54l05  = ["_radio", "embassy-nrf/nrf54l05-app-s",  "nrf-sdc/nrf54l05-app-s"]
+nrf54lm20 = ["_radio", "embassy-nrf/nrf54lm20-app-s", "nrf-sdc/nrf54lm20-app-s"]
+# nRF52 family (Cortex-M4F, thumbv7em-none-eabihf) — shared bring-up chip/nrf52.rs.
+nrf52840  = ["_radio", "embassy-nrf/nrf52840", "nrf-sdc/nrf52840"]
+nrf52833  = ["_radio", "embassy-nrf/nrf52833", "nrf-sdc/nrf52833"]
+nrf52832  = ["_radio", "embassy-nrf/nrf52832", "nrf-sdc/nrf52832"]
+
+[profile.release]
+panic = "abort"
+opt-level = "z"
+lto = true
+codegen-units = 1
+
+[profile.dev]
+panic = "abort"
+
+[patch.crates-io]
+embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", rev = "82e83a4bdd269ffb643a200da46f1f415e6548db" }
+embassy-nrf = { git = "https://github.com/embassy-rs/embassy.git", rev = "82e83a4bdd269ffb643a200da46f1f415e6548db" }
+embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "82e83a4bdd269ffb643a200da46f1f415e6548db" }
+embassy-futures = { git = "https://github.com/embassy-rs/embassy.git", rev = "82e83a4bdd269ffb643a200da46f1f415e6548db" }
+embassy-time = { git = "https://github.com/embassy-rs/embassy.git", rev = "82e83a4bdd269ffb643a200da46f1f415e6548db" }
+embassy-time-driver = { git = "https://github.com/embassy-rs/embassy.git", rev = "82e83a4bdd269ffb643a200da46f1f415e6548db" }
+embassy-time-queue-utils = { git = "https://github.com/embassy-rs/embassy.git", rev = "82e83a4bdd269ffb643a200da46f1f415e6548db" }
+embassy-embedded-hal = { git = "https://github.com/embassy-rs/embassy.git", rev = "82e83a4bdd269ffb643a200da46f1f415e6548db" }
+nrf-sdc = { git = "https://github.com/alexmoon/nrf-sdc.git", rev = "e1fbb89a173dfc053ec4877d366f51804eac498d" }
+nrf-mpsl = { git = "https://github.com/alexmoon/nrf-sdc.git", rev = "e1fbb89a173dfc053ec4877d366f51804eac498d" }
