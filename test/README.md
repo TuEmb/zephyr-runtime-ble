@@ -43,7 +43,7 @@ It prints the measured per-cycle delta, e.g.:
 
 ```sh
 west init -l test
-west update                  # clones Zephyr v4.4.1 + zephyr-runtime-ble
+west update                  # clones the pinned Zephyr + zephyr-runtime-ble
 west zephyr-export
 west build -p always -b xiao_nrf54l15/nrf54l15/cpuapp test
 west flash

@@ -13,7 +13,10 @@ it costs ~no RAM until loaded.
 It exposes a generic **Nordic-UART-style GATT peripheral** (RX write + TX notify)
 behind a small C API ([`include/runtime_ble.h`](include/runtime_ble.h)).
 
-Targets **Zephyr 4.4.1**.
+**Not tied to a Zephyr version.** The prebuilt staticlib and the thin C glue use
+only stable Zephyr APIs, so the module builds against any recent Zephyr —
+verified on 4.1.x through 4.4.x. The examples just pin one release in their
+`west.yml`; change it to whatever you build against.
 
 ## Layout
 
@@ -59,21 +62,21 @@ Notes:
 ## Build
 
 ### 1. Prerequisites
-- **west**, **Zephyr SDK 1.0.x** (or a `gnuarmemb` arm-none-eabi toolchain), CMake, Ninja, Python.
+- **west**, a recent **Zephyr SDK** (0.16+) (or a `gnuarmemb` arm-none-eabi toolchain), CMake, Ninja, Python.
 - **Rust 1.92** (1.90 miscompiles nrf-sdc): `rustup toolchain install 1.92`,
   `rustup target add thumbv8m.main-none-eabi thumbv7em-none-eabihf`.
 - **LLVM/clang** (for the nrf-sdc/nrf-mpsl bindgen step).
 
 ### 2. Examples are standalone west apps (no `-DZEPHYR_EXTRA_MODULES`)
 Each `examples/<chip>/` is an **independent application** with its own
-[`west.yml`](examples/nrf54l15/west.yml) that pulls **Zephyr 4.4.1 + the
+[`west.yml`](examples/nrf54l15/west.yml) that pulls **Zephyr + the
 `zephyr-runtime-ble` module via git**. west auto-discovers runtime-ble as a Zephyr
 module (it has `zephyr/module.yml`), so nothing is passed on the command line.
 
 Use an example as its own git repo (e.g. copy `examples/nrf54l15` out), then:
 ```sh
 west init -l nrf54l15      # the example dir is the manifest repo
-west update                # clones Zephyr v4.4.1 + zephyr-runtime-ble (+ its prebuilt libs)
+west update                # clones the pinned Zephyr + zephyr-runtime-ble (+ its prebuilt libs)
 west zephyr-export
 west build -p always -b xiao_nrf54l15/nrf54l15/cpuapp nrf54l15
 west flash

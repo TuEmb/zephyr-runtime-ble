@@ -5,7 +5,7 @@
 # (west auto-discovers zephyr-runtime-ble as a module via its zephyr/module.yml).
 #
 #   west init -l nrf54l15        # use this example as the manifest (it must be a git repo)
-#   west update            # clones Zephyr v4.4.1 + zephyr-runtime-ble
+#   west update            # clones Zephyr + zephyr-runtime-ble
 #   west build -b <board> nrf54l15
 manifest:
   remotes:
@@ -15,6 +15,9 @@ manifest:
       url-base: https://github.com/TuEmb
 
   projects:
+    # Not tied to a Zephyr version: the module uses only stable APIs + a prebuilt
+    # staticlib (verified on 4.1.x-4.4.x). This is just the release this example
+    # pins -- change it to whatever you build against.
     - name: zephyr
       remote: zephyrproject
       revision: v4.4.1
