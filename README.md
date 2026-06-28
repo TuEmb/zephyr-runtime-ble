@@ -140,6 +140,12 @@ See [`examples/gatt_client/`](examples/gatt_client/) (HW-verified
 against the peripheral echo example). The role is feature-gated so peripheral-
 only apps stay on the lean default lib (see [`rust/README.md`](rust/README.md)).
 
+**Both at once** — `config.role = RUNTIME_BLE_ROLE_DUAL` makes a central-capable
+build act as a **GATT server *and* client simultaneously** (two links): it
+advertises + serves incoming centrals while also connecting to `peer_address` as
+a client. See [`examples/dual/`](examples/dual/) (HW-verified: advertises
+`RTBLE-DUAL` while connected as a client).
+
 ## Adding a chip
 1. Add a `<chip> = ["_radio", "embassy-nrf/<chip>", "nrf-sdc/<chip>"]` feature
    in `rust/Cargo.toml`.

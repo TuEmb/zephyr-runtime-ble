@@ -11,6 +11,7 @@ and `boards/<board>.conf` overlays apply any board-specific tweaks.
 | [`gatt_client/`](gatt_client/) | Central: scan/connect + discover/read/write/subscribe | `libruntime_ble_central.a` (`CONFIG_RUNTIME_BLE_CENTRAL=y`) |
 | [`l2cap_peripheral/`](l2cap_peripheral/) | L2CAP CoC echo server | `libruntime_ble_l2cap.a` (`CONFIG_RUNTIME_BLE_L2CAP=y`) |
 | [`l2cap_central/`](l2cap_central/) | Central that opens an L2CAP channel | `libruntime_ble_central_l2cap.a` (both) |
+| [`dual/`](dual/) | **Server + client at once** (advertise/serve AND connect/query) | `libruntime_ble_central.a` (`CONFIG_RUNTIME_BLE_CENTRAL=y`) |
 
 The default lib (peripheral + GATT server) is committed for all chips, so
 `gatt_server` builds for every board out of the box. The other examples need a
@@ -46,3 +47,6 @@ Boards (qualifier → `boards/<board>.conf` overlay):
   discovers, subscribes, writes, and receives the echo notification.
 - **L2CAP**: flash `l2cap_peripheral` on one board, `l2cap_central` on another
   (set `PEER_*`) — the central opens a channel, sends, and receives the echo.
+- **Dual**: flash `gatt_server` on one board, `dual` on another (set `PEER_*` to
+  the server) — the dual device is a client to it (discovers/writes/echo) **and**
+  advertises `RTBLE-DUAL` as a server at the same time (CONNECTIONS_MAX=2).
