@@ -137,6 +137,11 @@ pub extern "C" fn runtime_alarm_fired() {
 // ---------------------------------------------------------------------------
 pub(crate) const VALUE_LEN: usize = 244;
 const ATT_MAX: usize = 64;
+// The central-capable builds allow two simultaneous links so a device can be a
+// peripheral (server) and a central (client) at the same time (RUNTIME_BLE_ROLE_DUAL).
+#[cfg(feature = "central")]
+const CONNECTIONS_MAX: usize = 2;
+#[cfg(not(feature = "central"))]
 const CONNECTIONS_MAX: usize = 1;
 const L2CAP_CHANNELS_MAX: usize = 2;
 
@@ -343,6 +348,16 @@ pub(crate) fn serve_session(
     let runner = stack.runner();
     let ble_main = async {
         let work = join(run_runner(runner), serve(&mut peripheral, &gatt, server, stack, cfg));
+        // Dual GAP role (RUNTIME_BLE_ROLE_DUAL): also run the central side
+        // (connect + GATT client) so the device is a server (this advertise/serve
+        // loop) AND a client at the same time, on two simultaneous links.
+        #[cfg(feature = "central")]
+        if cfg.role == 2 {
+            select3(work, central_loop(stack, cfg), wait_unload()).await;
+        } else {
+            select(work, wait_unload()).await;
+        }
+        #[cfg(not(feature = "central"))]
         select(work, wait_unload()).await;
     };
     block_on(select(mpsl.run(), ble_main));

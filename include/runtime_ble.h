@@ -45,6 +45,7 @@ extern "C" {
 /* ---- Role (config.role) ---- */
 #define RUNTIME_BLE_ROLE_PERIPHERAL 0   /* advertise + GATT server (default)  */
 #define RUNTIME_BLE_ROLE_CENTRAL    1   /* scan/connect + GATT client         */
+#define RUNTIME_BLE_ROLE_DUAL       2   /* both at once: server + client      */
 
 /* ---- Optional user-defined GATT ----
  * Characteristic property bitmask. */
