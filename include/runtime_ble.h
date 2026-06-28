@@ -94,6 +94,14 @@ typedef struct {
 
 	/* Optional text log line (NUL-terminated) for the app's console. */
 	void (*on_log)(const char *line, void *user);
+
+	/* ---- L2CAP CoC (lib built with the l2cap feature) ---- */
+	/* The L2CAP channel (config.l2cap_psm) was established. */
+	void (*on_l2cap_connected)(void *user);
+	/* An SDU was received on the L2CAP channel. */
+	void (*on_l2cap_data)(const uint8_t *data, size_t len, void *user);
+	/* The L2CAP channel closed. */
+	void (*on_l2cap_disconnected)(void *user);
 } runtime_ble_callbacks_t;
 
 /*
@@ -129,6 +137,10 @@ typedef struct {
 	/* Central only: optional 6-byte peer (LSB first) to auto-connect on load;
 	 * NULL -> none (use runtime_ble_scan_start + runtime_ble_connect). */
 	const uint8_t          *peer_address;
+	/* L2CAP connection-oriented channel PSM (0 = disabled). Once connected, a
+	 * peripheral listens on it and a central opens it. Needs a l2cap-capable
+	 * lib (CONFIG_RUNTIME_BLE_L2CAP=y). */
+	uint16_t                l2cap_psm;
 
 	runtime_ble_callbacks_t callbacks;
 	void                   *user;                 /* opaque, passed back to callbacks      */
@@ -190,6 +202,15 @@ int runtime_ble_client_write(uint16_t handle, const uint8_t *data, size_t len);
 /* Subscribe to a characteristic (enable notify/indicate); incoming values arrive
  * via on_notification. */
 int runtime_ble_client_subscribe(uint16_t handle);
+
+/* ---- L2CAP API ----
+ * Available with a l2cap-capable lib (CONFIG_RUNTIME_BLE_L2CAP=y) and
+ * config.l2cap_psm != 0; otherwise returns RUNTIME_BLE_ERR_INVALID. The channel
+ * opens automatically once connected (on_l2cap_connected); received SDUs arrive
+ * via on_l2cap_data. */
+
+/* Queue one SDU to send on the open L2CAP channel (<= the negotiated MTU). */
+int runtime_ble_l2cap_send(const uint8_t *data, size_t len);
 
 /* ---- Internal (glue <-> staticlib); do not call from the application ---- */
 void runtime_ble_run(int mode);

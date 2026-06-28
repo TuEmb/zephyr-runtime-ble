@@ -82,6 +82,11 @@ roles — `CMakeLists.txt` selects it from the matching `CONFIG_RUNTIME_BLE_*`:
 |---|---|---|
 | (none) | `libruntime_ble.a` | default |
 | `central` | `libruntime_ble_central.a` | `CONFIG_RUNTIME_BLE_CENTRAL=y` |
+| `l2cap` | `libruntime_ble_l2cap.a` | `CONFIG_RUNTIME_BLE_L2CAP=y` |
+| `central,l2cap` | `libruntime_ble_central_l2cap.a` | both of the above |
+
+The filename suffix is `_central` then `_l2cap`, in that order (matching
+`CMakeLists.txt`).
 
 Add the feature to the build and stage under the matching name, e.g. on Linux:
 ```sh

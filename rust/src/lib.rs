@@ -83,6 +83,12 @@ pub struct RuntimeBleCallbacks {
         Option<extern "C" fn(handle: u16, data: *const u8, len: usize, user: *mut c_void)>,
     /// Optional NUL-terminated text log line for the app's console.
     pub on_log: Option<extern "C" fn(line: *const c_char, user: *mut c_void)>,
+    /// L2CAP: channel established.
+    pub on_l2cap_connected: Option<extern "C" fn(user: *mut c_void)>,
+    /// L2CAP: an SDU was received.
+    pub on_l2cap_data: Option<extern "C" fn(data: *const u8, len: usize, user: *mut c_void)>,
+    /// L2CAP: channel closed.
+    pub on_l2cap_disconnected: Option<extern "C" fn(user: *mut c_void)>,
 }
 
 /// C ABI: one characteristic (must match runtime_ble.h).
@@ -132,6 +138,7 @@ pub struct RuntimeBleConfig {
     pub role: u8,
     /// Central only: optional 6-byte peer to auto-connect on load (null -> none).
     pub peer_address: *const u8,
+    pub l2cap_psm: u16,
     pub callbacks: RuntimeBleCallbacks,
     pub user: *mut c_void,
 }
@@ -151,6 +158,7 @@ pub(crate) struct RuntimeCfg {
     pub num_services: u8,
     pub role: u8,
     pub peer_address: *const u8,
+    pub l2cap_psm: u16,
     pub callbacks: RuntimeBleCallbacks,
     pub user: *mut c_void,
 }
@@ -190,6 +198,11 @@ pub(crate) static mut CENTRAL_UUID: [u8; 16] = [0; 16];
 pub(crate) static CENTRAL_UUID_LEN: AtomicUsize = AtomicUsize::new(0);
 // CCMD_WRITE payload reuses SEND_BUF / SEND_LEN (a session is one role only).
 
+// ---- L2CAP outbound SDU (single outstanding; consumed by the l2cap send pump) ----
+pub(crate) static L2CAP_SEND_REQ: AtomicBool = AtomicBool::new(false);
+pub(crate) static L2CAP_SEND_LEN: AtomicUsize = AtomicUsize::new(0);
+pub(crate) static mut L2CAP_SEND_BUF: [u8; SEND_BUF_CAP] = [0; SEND_BUF_CAP];
+
 const RUNTIME_BLE_OK: c_int = 0;
 const RUNTIME_BLE_ERR_INVALID: c_int = -1;
 const RUNTIME_BLE_ERR_NO_MEM: c_int = -2;
@@ -215,6 +228,7 @@ pub extern "C" fn runtime_ble_init(cfg: *const RuntimeBleConfig) -> c_int {
             num_services: c.num_services,
             role: c.role,
             peer_address: c.peer_address,
+            l2cap_psm: c.l2cap_psm,
             callbacks: c.callbacks,
             user: c.user,
         });
@@ -361,6 +375,35 @@ pub extern "C" fn runtime_ble_client_write(handle: u16, data: *const u8, len: us
 #[no_mangle]
 pub extern "C" fn runtime_ble_client_subscribe(handle: u16) -> c_int {
     central_cmd(CCMD_SUBSCRIBE, handle as u32)
+}
+
+// ---- L2CAP API ----
+#[no_mangle]
+pub extern "C" fn runtime_ble_l2cap_send(data: *const u8, len: usize) -> c_int {
+    #[cfg(feature = "l2cap")]
+    {
+        if data.is_null() || len == 0 || len > SEND_BUF_CAP {
+            return RUNTIME_BLE_ERR_INVALID;
+        }
+        if L2CAP_SEND_REQ.load(Ordering::Acquire) {
+            return RUNTIME_BLE_ERR_NO_MEM;
+        }
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                data,
+                core::ptr::addr_of_mut!(L2CAP_SEND_BUF) as *mut u8,
+                len,
+            );
+        }
+        L2CAP_SEND_LEN.store(len, Ordering::Release);
+        L2CAP_SEND_REQ.store(true, Ordering::Release);
+        RUNTIME_BLE_OK
+    }
+    #[cfg(not(feature = "l2cap"))]
+    {
+        let _ = (data, len);
+        RUNTIME_BLE_ERR_INVALID
+    }
 }
 
 /// Run ONE BLE session. Allocates everything on the heap, runs until

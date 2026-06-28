@@ -52,4 +52,17 @@ config RUNTIME_BLE_CENTRAL
 	  matching staticlib must exist for the target chip — build it with the
 	  `central` Cargo feature (see rust/README.md).
 
+config RUNTIME_BLE_L2CAP
+	bool "Enable L2CAP connection-oriented channels (CoC)"
+	default n
+	help
+	  Links a l2cap-capable prebuilt staticlib (the lib filename gains a
+	  "_l2cap" suffix) and enables the L2CAP API (runtime_ble_l2cap_send +
+	  the on_l2cap_* callbacks). Once connected, a peripheral listens on
+	  config.l2cap_psm and a central opens a channel to it.
+
+	  Off by default. Combine with CONFIG_RUNTIME_BLE_CENTRAL for a central
+	  that opens channels. The matching staticlib must exist for the target
+	  chip — build it with the `l2cap` Cargo feature (see rust/README.md).
+
 endif # RUNTIME_BLE

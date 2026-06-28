@@ -121,10 +121,16 @@ pub(crate) fn run(cfg: Option<&'static RuntimeCfg>, _mode: c_int) {
     let sdc = build_sdc(sdc_p, unsafe { &mut *rng_ptr }, mpsl, unsafe { &mut *mem_ptr }).unwrap();
 
     let res_ptr: *mut Resources = Box::into_raw(Box::new(HostResources::new()));
-    let stack = trouble_host::new(sdc, unsafe { &mut *res_ptr })
+    let builder = trouble_host::new(sdc, unsafe { &mut *res_ptr })
         .set_random_address(device_address(cfg))
-        .set_io_capabilities(IoCapabilities::NoInputNoOutput)
-        .build();
+        .set_io_capabilities(IoCapabilities::NoInputNoOutput);
+    #[cfg(feature = "l2cap")]
+    let builder = if cfg.l2cap_psm != 0 {
+        builder.register_l2cap_spsm(cfg.l2cap_psm)
+    } else {
+        builder
+    };
+    let stack = builder.build();
 
     log(cfg, c"[runtime-ble] loaded on heap");
     #[cfg(feature = "central")]

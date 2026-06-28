@@ -40,6 +40,7 @@ default = []
 # peripheral + GATT-server build; enabling one changes the staged lib filename
 # (e.g. `--features nrf54l15,central` -> stage as libruntime_ble_central.a).
 central = []   # scan/connect + GATT client (RUNTIME_BLE_ROLE_CENTRAL)
+l2cap = []     # L2CAP connection-oriented channels (config.l2cap_psm)
 # Common radio dependencies, shared by every chip feature below.
 _radio = [
     "dep:embassy-executor",

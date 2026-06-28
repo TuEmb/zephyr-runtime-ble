@@ -17,7 +17,7 @@ use core::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 
 use embassy_futures::join::join;
 use embassy_futures::select::select;
-#[cfg(feature = "central")]
+#[cfg(any(feature = "central", feature = "l2cap"))]
 use embassy_futures::select::select3;
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_time::{Duration, Timer};
@@ -30,6 +30,8 @@ use trouble_host::prelude::*;
 use trouble_host::connection::{ConnectConfig, ScanConfig};
 #[cfg(feature = "central")]
 use trouble_host::gatt::GattClient;
+#[cfg(feature = "l2cap")]
+use trouble_host::l2cap::{L2capChannel, L2capChannelConfig};
 
 use crate::{
     RuntimeBleCharDef, RuntimeCfg, NUS_TX_CHR, SEND_BUF, SEND_BUF_CAP,
@@ -41,6 +43,8 @@ use crate::{
     CCMD_SCAN_STOP, CCMD_SUBSCRIBE, CCMD_WRITE, CENTRAL_ADDR, CENTRAL_CMD, CENTRAL_HANDLE,
     CENTRAL_UUID, CENTRAL_UUID_LEN,
 };
+#[cfg(feature = "l2cap")]
+use crate::{L2CAP_SEND_BUF, L2CAP_SEND_LEN, L2CAP_SEND_REQ};
 
 // Per-chip bring-up. Exactly one chip feature is enabled; `chip::run` is the
 // entry called from lib.rs.
@@ -362,6 +366,102 @@ async fn run_runner<C: Controller, P: PacketPool>(mut runner: Runner<'_, C, P>) 
     let _ = runner.run().await;
 }
 
+/// Run a peripheral connection: the GATT server, plus (when l2cap is enabled
+/// and a PSM is configured) an L2CAP listener, concurrently.
+async fn run_connection(
+    conn: &Connection<'_, DefaultPacketPool>,
+    server: &Srv,
+    gatt: &Gatt,
+    stack: &Stack<'_, nrf_sdc::SoftdeviceController<'static>, DefaultPacketPool>,
+    cfg: &RuntimeCfg,
+) {
+    #[cfg(feature = "l2cap")]
+    {
+        if cfg.l2cap_psm != 0 {
+            select(
+                connection_task(conn, server, gatt, stack, cfg),
+                l2cap_peripheral(stack, conn, cfg),
+            )
+            .await;
+            return;
+        }
+    }
+    connection_task(conn, server, gatt, stack, cfg).await;
+}
+
+// ---------------------------------------------------------------------------
+// L2CAP connection-oriented channels. Compiled only with `--features l2cap`.
+// Shared by both roles: the peripheral listens, the central creates.
+// ---------------------------------------------------------------------------
+#[cfg(feature = "l2cap")]
+async fn l2cap_peripheral(
+    stack: &Stack<'_, nrf_sdc::SoftdeviceController<'static>, DefaultPacketPool>,
+    conn: &Connection<'_, DefaultPacketPool>,
+    cfg: &RuntimeCfg,
+) {
+    let listener = L2capChannel::listen(stack, conn);
+    loop {
+        match listener.accept(&L2capChannelConfig::default()).await {
+            Ok(ch) => l2cap_serve(stack, ch, cfg).await,
+            Err(_) => Timer::after(Duration::from_millis(200)).await,
+        }
+        if UNLOAD_REQ.load(Ordering::Acquire) {
+            break;
+        }
+    }
+}
+
+/// Pump an established L2CAP channel: deliver received SDUs to on_l2cap_data and
+/// send queued SDUs (runtime_ble_l2cap_send), until the channel closes or unload.
+#[cfg(feature = "l2cap")]
+async fn l2cap_serve(
+    stack: &Stack<'_, nrf_sdc::SoftdeviceController<'static>, DefaultPacketPool>,
+    channel: L2capChannel<'_, DefaultPacketPool>,
+    cfg: &RuntimeCfg,
+) {
+    if let Some(cb) = cfg.callbacks.on_l2cap_connected {
+        cb(cfg.user);
+    }
+    L2CAP_SEND_REQ.store(false, Ordering::Release);
+    let (mut writer, mut reader) = channel.split();
+
+    let recv = async {
+        loop {
+            match reader.receive_sdu(stack).await {
+                Ok(sdu) => {
+                    let d = sdu.as_ref();
+                    if let Some(cb) = cfg.callbacks.on_l2cap_data {
+                        cb(d.as_ptr(), d.len(), cfg.user);
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+    };
+    let send = async {
+        loop {
+            if L2CAP_SEND_REQ.load(Ordering::Acquire) {
+                let len = L2CAP_SEND_LEN.load(Ordering::Acquire).min(VALUE_LEN);
+                let mut b = [0u8; VALUE_LEN];
+                unsafe {
+                    core::ptr::copy_nonoverlapping(
+                        core::ptr::addr_of!(L2CAP_SEND_BUF) as *const u8,
+                        b.as_mut_ptr(),
+                        len,
+                    );
+                }
+                L2CAP_SEND_REQ.store(false, Ordering::Release);
+                let _ = writer.send(stack, &b[..len]).await;
+            }
+            Timer::after(Duration::from_millis(20)).await;
+        }
+    };
+    select3(recv, send, wait_unload()).await;
+    if let Some(cb) = cfg.callbacks.on_l2cap_disconnected {
+        cb(cfg.user);
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Central role: scan/connect + GATT client. Compiled only with `--features
 // central` (the SDC central support is added in chip/<soc>.rs::build_sdc).
@@ -424,7 +524,7 @@ async fn central_loop(
                 if let Some(cb) = cfg.callbacks.on_connected {
                     cb(cfg.user);
                 }
-                client_session(stack, &conn, cfg).await;
+                run_central_conn(stack, &conn, cfg).await;
                 if let Some(cb) = cfg.callbacks.on_disconnected {
                     cb(0, cfg.user);
                 }
@@ -582,6 +682,42 @@ async fn client_discover(
     }
 }
 
+/// Run a central connection: the GATT client, plus (when l2cap is enabled and a
+/// PSM is configured) an L2CAP channel to the peer, concurrently.
+#[cfg(feature = "central")]
+async fn run_central_conn(
+    stack: &Stack<'_, nrf_sdc::SoftdeviceController<'static>, DefaultPacketPool>,
+    conn: &Connection<'_, DefaultPacketPool>,
+    cfg: &RuntimeCfg,
+) {
+    #[cfg(feature = "l2cap")]
+    {
+        if cfg.l2cap_psm != 0 {
+            select(
+                client_session(stack, conn, cfg),
+                l2cap_central(stack, conn, cfg),
+            )
+            .await;
+            return;
+        }
+    }
+    client_session(stack, conn, cfg).await;
+}
+
+/// Central side of L2CAP: open a channel to the peer's PSM, then pump it.
+#[cfg(all(feature = "central", feature = "l2cap"))]
+async fn l2cap_central(
+    stack: &Stack<'_, nrf_sdc::SoftdeviceController<'static>, DefaultPacketPool>,
+    conn: &Connection<'_, DefaultPacketPool>,
+    cfg: &RuntimeCfg,
+) {
+    Timer::after(Duration::from_millis(400)).await; // let the link/MTU settle
+    match L2capChannel::create(stack, conn, cfg.l2cap_psm, &L2capChannelConfig::default()).await {
+        Ok(ch) => l2cap_serve(stack, ch, cfg).await,
+        Err(_) => log_str(cfg, "[l2cap] create failed\0"),
+    }
+}
+
 async fn wait_unload() {
     while !UNLOAD_REQ.load(Ordering::Acquire) {
         Timer::after(Duration::from_millis(50)).await;
@@ -601,7 +737,7 @@ async fn serve(
                 if let Some(cb) = cfg.callbacks.on_connected {
                     cb(cfg.user);
                 }
-                connection_task(&conn, server, gatt, stack, cfg).await;
+                run_connection(&conn, server, gatt, stack, cfg).await;
                 if let Some(cb) = cfg.callbacks.on_disconnected {
                     cb(0, cfg.user);
                 }
