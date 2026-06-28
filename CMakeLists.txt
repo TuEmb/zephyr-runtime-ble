@@ -33,7 +33,7 @@ endif()
 set(RTBLE_LIB ${RTBLE_DIR}/lib/${RTBLE_CHIP}/libruntime_ble.a)
 if(NOT EXISTS ${RTBLE_LIB})
   message(FATAL_ERROR "runtime-ble: ${RTBLE_LIB} not found. "
-                      "Build the Rust staticlib first (see rust/ + scripts/build_lib.ps1).")
+                      "Build the Rust staticlib first (see rust/README.md).")
 endif()
 
 # Prebuilt Rust staticlib (owns the radio; build the app with CONFIG_BT=n).

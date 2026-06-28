@@ -26,11 +26,11 @@ runtime-ble/
 ├── glue/glue.c              Zephyr glue (thread, sem, alarm, hwinfo addr, IRQs)
 ├── lib/<chip>/              prebuilt staticlibs (built from rust/)
 ├── rust/                    the Rust crate (trouble + nrf-sdc)
+│   ├── README.md            how to build the staticlib (Linux/macOS/Windows)
 │   └── src/
 │       ├── lib.rs           C ABI + heap allocator + panic
-│       ├── radio.rs         chip-agnostic: executor, NUS server, advertise loop
+│       ├── radio.rs         chip-agnostic: executor, runtime GATT, advertise loop
 │       └── chip/<soc>.rs    per-chip MPSL/SDC + interrupt bring-up
-├── scripts/build_lib.ps1    build + stage the staticlib for a chip
 └── examples/<board>/        example apps
 ```
 
@@ -84,10 +84,8 @@ west flash
 
 ### 3. (Re)building the per-chip staticlib
 The prebuilt `lib/<chip>/libruntime_ble.a` is committed (so `west update` brings it). Rebuild it
-only after editing `rust/`, from a clone of this library repo:
-```powershell
-.\scripts\build_lib.ps1 -Chip nrf54l15   # stages lib/nrf54l15/libruntime_ble.a
-```
+only after editing `rust/` — see [`rust/README.md`](rust/README.md) for the per-platform
+(Linux / macOS / Windows) cargo + bindgen recipe.
 
 ## Try it
 Scan with the **nRF Connect** mobile app for `RUNTIME-BLE`, connect, find the
@@ -127,4 +125,4 @@ built-in NUS RX), `on_log`. They run on the BLE thread — keep them short.
 2. Reuse a family bring-up (`rust/src/chip/nrf54l.rs` or `nrf52.rs`) or add one
    (`Irqs` + `runtime_irq_*` shims + `build_sdc` + `run`).
 3. Add the matching IRQ branch in `glue/glue.c` and the SoC case in `CMakeLists.txt`.
-4. `.\scripts\build_lib.ps1 -Chip <chip>` and add `examples/<board>/`.
+4. Build the staticlib ([`rust/README.md`](rust/README.md)) and add `examples/<board>/`.
