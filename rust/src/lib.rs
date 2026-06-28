@@ -66,10 +66,32 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 pub struct RuntimeBleCallbacks {
     pub on_connected: Option<extern "C" fn(user: *mut c_void)>,
     pub on_disconnected: Option<extern "C" fn(reason: u8, user: *mut c_void)>,
-    /// Bytes written by the peer to the RX characteristic.
+    /// Bytes written by the peer to the built-in NUS RX characteristic.
     pub on_data: Option<extern "C" fn(data: *const u8, len: usize, user: *mut c_void)>,
+    /// Peer wrote to a user-defined characteristic `chr` (flat index).
+    pub on_write: Option<extern "C" fn(chr: u16, data: *const u8, len: usize, user: *mut c_void)>,
     /// Optional NUL-terminated text log line for the app's console.
     pub on_log: Option<extern "C" fn(line: *const c_char, user: *mut c_void)>,
+}
+
+/// C ABI: one characteristic (must match runtime_ble.h).
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct RuntimeBleCharDef {
+    pub uuid: *const u8,
+    pub uuid_len: u8,
+    pub props: u16,
+    pub max_len: u16,
+}
+
+/// C ABI: one service + its characteristics (must match runtime_ble.h).
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct RuntimeBleServiceDef {
+    pub uuid: *const u8,
+    pub uuid_len: u8,
+    pub chars: *const RuntimeBleCharDef,
+    pub num_chars: u8,
 }
 
 /// Advertising / GAP configuration. All fields are optional: a zeroed struct
@@ -92,6 +114,9 @@ pub struct RuntimeBleConfig {
     pub discoverable: u8,
     /// Optional custom 6-byte static-random address; null -> hwinfo-derived.
     pub address: *const u8,
+    /// User-defined GATT (null/0 -> built-in NUS). Built at load time.
+    pub services: *const RuntimeBleServiceDef,
+    pub num_services: u8,
     pub callbacks: RuntimeBleCallbacks,
     pub user: *mut c_void,
 }
@@ -107,6 +132,8 @@ pub(crate) struct RuntimeCfg {
     pub adv_interval_max_ms: u16,
     pub discoverable: u8,
     pub address: *const u8,
+    pub services: *const RuntimeBleServiceDef,
+    pub num_services: u8,
     pub callbacks: RuntimeBleCallbacks,
     pub user: *mut c_void,
 }
@@ -121,6 +148,10 @@ pub(crate) static SEND_LEN: AtomicUsize = AtomicUsize::new(0);
 /// One outstanding TX notification (raw, <= the TX characteristic value length).
 pub(crate) const SEND_BUF_CAP: usize = 512;
 pub(crate) static mut SEND_BUF: [u8; SEND_BUF_CAP] = [0; SEND_BUF_CAP];
+/// Target characteristic for the queued TX: a flat index, or NUS_TX_CHR.
+pub(crate) static SEND_CHR: AtomicUsize = AtomicUsize::new(NUS_TX_CHR);
+/// Sentinel meaning "the built-in NUS TX characteristic".
+pub(crate) const NUS_TX_CHR: usize = usize::MAX;
 
 const RUNTIME_BLE_OK: c_int = 0;
 const RUNTIME_BLE_ERR_INVALID: c_int = -1;
@@ -143,6 +174,8 @@ pub extern "C" fn runtime_ble_init(cfg: *const RuntimeBleConfig) -> c_int {
             adv_interval_max_ms: c.adv_interval_max_ms,
             discoverable: c.discoverable,
             address: c.address,
+            services: c.services,
+            num_services: c.num_services,
             callbacks: c.callbacks,
             user: c.user,
         });
@@ -157,9 +190,8 @@ pub extern "C" fn runtime_ble_signal_unload() {
     UNLOAD_REQ.store(true, Ordering::Release);
 }
 
-/// Queue one notification to send to the connected central. Single outstanding.
-#[no_mangle]
-pub extern "C" fn runtime_ble_send(data: *const u8, len: usize) -> c_int {
+/// Queue one outstanding TX to characteristic `chr`. Single outstanding.
+fn queue_tx(chr: usize, data: *const u8, len: usize) -> c_int {
     if data.is_null() || len == 0 || len > SEND_BUF_CAP {
         return RUNTIME_BLE_ERR_INVALID;
     }
@@ -169,9 +201,23 @@ pub extern "C" fn runtime_ble_send(data: *const u8, len: usize) -> c_int {
     unsafe {
         core::ptr::copy_nonoverlapping(data, core::ptr::addr_of_mut!(SEND_BUF) as *mut u8, len);
     }
+    SEND_CHR.store(chr, Ordering::Release);
     SEND_LEN.store(len, Ordering::Release);
     SEND_REQ.store(true, Ordering::Release);
     RUNTIME_BLE_OK
+}
+
+/// Queue one notification on the built-in NUS TX characteristic.
+#[no_mangle]
+pub extern "C" fn runtime_ble_send(data: *const u8, len: usize) -> c_int {
+    queue_tx(NUS_TX_CHR, data, len)
+}
+
+/// Queue one notification/indication on a user-defined characteristic `chr`
+/// (flat index in declaration order across config.services).
+#[no_mangle]
+pub extern "C" fn runtime_ble_notify(chr: u16, data: *const u8, len: usize) -> c_int {
+    queue_tx(chr as usize, data, len)
 }
 
 /// Run ONE BLE session. Allocates everything on the heap, runs until
