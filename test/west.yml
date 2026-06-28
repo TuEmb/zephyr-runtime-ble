@@ -1,0 +1,33 @@
+# Standalone west manifest for the runtime-ble on-target test suite.
+#
+# Like the examples, the test app is independent of the library repo: it pulls
+# Zephyr AND the zephyr-runtime-ble module via git, so it builds with NO
+# -DZEPHYR_EXTRA_MODULES (west auto-discovers the module via zephyr/module.yml).
+#
+#   west init -l test        # use this dir as the manifest (must be a git repo)
+#   west update              # clones Zephyr v4.4.1 + zephyr-runtime-ble
+#   west build -b xiao_nrf54l15/nrf54l15/cpuapp test
+#   west flash
+#
+# To test LOCAL (uncommitted) changes to the library, point the
+# zephyr-runtime-ble project's `revision` at your branch, or build the test
+# inside a workspace where the repo is the local module.
+manifest:
+  remotes:
+    - name: zephyrproject
+      url-base: https://github.com/zephyrproject-rtos
+    - name: tuemb
+      url-base: https://github.com/TuEmb
+
+  projects:
+    - name: zephyr
+      remote: zephyrproject
+      revision: v4.4.1
+      import: true
+    - name: zephyr-runtime-ble
+      remote: tuemb
+      revision: main
+      path: modules/zephyr-runtime-ble
+
+  self:
+    path: test

@@ -1,0 +1,48 @@
+/*
+ * Shared helpers for the runtime-ble test suites.
+ */
+#include <zephyr/kernel.h>
+#include <zephyr/sys/printk.h>
+#include <zephyr/sys/sys_heap.h>
+
+#include "test_support.h"
+
+/* The Zephyr system heap, backing k_aligned_alloc/k_free (what the Rust lib
+ * allocates from) and k_thread_stack_alloc (with DYNAMIC_THREAD_PREFER_ALLOC). */
+extern struct k_heap _system_heap;
+
+static void on_log(const char *line, void *user)
+{
+	ARG_UNUSED(user);
+	printk("%s\n", line);
+}
+
+static const runtime_ble_config_t cfg = {
+	.device_name = "RTBLE-TEST",
+	.manufacturer_id = 0xFFFF,
+	.adv_interval_min_ms = 30,
+	.adv_interval_max_ms = 60,
+	/* services == NULL -> built-in Nordic UART Service. */
+	.callbacks = {
+		.on_log = on_log,
+	},
+};
+
+const runtime_ble_config_t *test_base_cfg(void)
+{
+	return &cfg;
+}
+
+size_t test_heap_free(void)
+{
+	struct sys_memory_stats st = {0};
+
+	sys_heap_runtime_stats_get(&_system_heap.heap, &st);
+	return st.free_bytes;
+}
+
+void test_load_settled(void)
+{
+	(void)runtime_ble_load();
+	k_sleep(K_MSEC(400));
+}
