@@ -26,7 +26,7 @@ use trouble_host::attribute::{AttributeTable, Characteristic, CharacteristicProp
 use trouble_host::prelude::*;
 
 use crate::{
-    RuntimeBleCharDef, RuntimeBleServiceDef, RuntimeCfg, NUS_TX_CHR, SEND_BUF, SEND_BUF_CAP,
+    RuntimeBleCharDef, RuntimeCfg, NUS_TX_CHR, SEND_BUF, SEND_BUF_CAP,
     SEND_CHR, SEND_LEN, SEND_REQ, UNLOAD_REQ,
 };
 
@@ -183,18 +183,30 @@ unsafe fn uuid_from(ptr: *const u8, len: u8) -> Uuid {
     }
 }
 
-fn leak_store() -> &'static mut [u8] {
-    Box::leak(Box::new([0u8; VALUE_LEN]))
+/// Allocate one characteristic value buffer on the heap, record its raw pointer
+/// for reclamation at unload, and hand the attribute table a `'static` mutable
+/// slice into it. The pointers collected in `stores` are turned back into
+/// `Box`es (and freed) by [`serve_session`] once the server/table are dropped,
+/// so a load/unload cycle returns all of its RAM.
+fn alloc_store(stores: &mut Vec<*mut [u8; VALUE_LEN]>) -> &'static mut [u8] {
+    let ptr = Box::into_raw(Box::new([0u8; VALUE_LEN]));
+    stores.push(ptr);
+    // SAFETY: ptr is freshly allocated and uniquely owned; it is not aliased
+    // until the matching Box::from_raw in serve_session's teardown.
+    let arr: &'static mut [u8; VALUE_LEN] = unsafe { &mut *ptr };
+    &mut arr[..]
 }
 
 /// The result of building the GATT: the server, every characteristic by flat
-/// index (declaration order), and the NUS RX/TX indices (usize::MAX if the
-/// user provided their own services).
+/// index (declaration order), the NUS RX/TX indices (usize::MAX if the user
+/// provided their own services), and the heap buffers backing the characteristic
+/// values (reclaimed at unload).
 struct Gatt {
     server: Box<Srv>,
     chars: Vec<Characteristic<[u8; VALUE_LEN]>>,
     nus_rx: usize,
     nus_tx: usize,
+    stores: Vec<*mut [u8; VALUE_LEN]>,
 }
 
 fn build_gatt(cfg: &RuntimeCfg, name: &'static str) -> Option<Gatt> {
@@ -207,6 +219,7 @@ fn build_gatt(cfg: &RuntimeCfg, name: &'static str) -> Option<Gatt> {
     .ok()?;
 
     let mut chars: Vec<Characteristic<[u8; VALUE_LEN]>> = Vec::new();
+    let mut stores: Vec<*mut [u8; VALUE_LEN]> = Vec::new();
     let (mut nus_rx, mut nus_tx) = (usize::MAX, usize::MAX);
 
     if cfg.services.is_null() || cfg.num_services == 0 {
@@ -218,7 +231,7 @@ fn build_gatt(cfg: &RuntimeCfg, name: &'static str) -> Option<Gatt> {
                 Uuid::new_long(NUS_RX),
                 CharacteristicProps::from(0x04 | 0x08), // write_nr + write
                 [0u8; VALUE_LEN],
-                leak_store(),
+                alloc_store(&mut stores),
             )
             .build(),
         );
@@ -228,7 +241,7 @@ fn build_gatt(cfg: &RuntimeCfg, name: &'static str) -> Option<Gatt> {
                 Uuid::new_long(NUS_TX),
                 CharacteristicProps::from(0x10), // notify
                 [0u8; VALUE_LEN],
-                leak_store(),
+                alloc_store(&mut stores),
             )
             .build(),
         );
@@ -243,8 +256,13 @@ fn build_gatt(cfg: &RuntimeCfg, name: &'static str) -> Option<Gatt> {
             for c in cdefs {
                 let cuuid = unsafe { uuid_from(c.uuid, c.uuid_len) };
                 chars.push(
-                    svc.add_characteristic(cuuid, map_props(c.props), [0u8; VALUE_LEN], leak_store())
-                        .build(),
+                    svc.add_characteristic(
+                        cuuid,
+                        map_props(c.props),
+                        [0u8; VALUE_LEN],
+                        alloc_store(&mut stores),
+                    )
+                    .build(),
                 );
             }
         }
@@ -255,6 +273,7 @@ fn build_gatt(cfg: &RuntimeCfg, name: &'static str) -> Option<Gatt> {
         chars,
         nus_rx,
         nus_tx,
+        stores,
     })
 }
 
@@ -311,9 +330,20 @@ pub(crate) fn serve_session(
         select(work, wait_unload()).await;
     };
     block_on(select(mpsl.run(), ble_main));
-    // Session torn down. (The per-characteristic value buffers are leaked for the
-    // life of the firmware — fine for the load-once usage; one server instance.)
-    drop(gatt);
+
+    // Teardown. Drop the server (and the attribute table it owns) and the
+    // characteristic handles FIRST, so nothing references the value buffers
+    // anymore, THEN reclaim those heap buffers — a load/unload cycle leaks no RAM.
+    let Gatt { server, chars, stores, .. } = gatt;
+    drop(server);
+    drop(chars);
+    for ptr in stores {
+        // SAFETY: each ptr came from alloc_store (Box::into_raw); the table that
+        // held the only `&'static mut` to it has just been dropped.
+        unsafe {
+            let _ = Box::from_raw(ptr);
+        }
+    }
 }
 
 async fn run_runner<C: Controller, P: PacketPool>(mut runner: Runner<'_, C, P>) {
