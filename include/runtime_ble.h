@@ -42,6 +42,10 @@ extern "C" {
 #define RUNTIME_BLE_ERR_INVALID -1
 #define RUNTIME_BLE_ERR_NO_MEM  -2
 
+/* ---- Role (config.role) ---- */
+#define RUNTIME_BLE_ROLE_PERIPHERAL 0   /* advertise + GATT server (default)  */
+#define RUNTIME_BLE_ROLE_CENTRAL    1   /* scan/connect + GATT client         */
+
 /* ---- Optional user-defined GATT ----
  * Characteristic property bitmask. */
 #define RUNTIME_BLE_PROP_READ        (1u << 0)
@@ -75,6 +79,19 @@ typedef struct {
 	/* Peer wrote to a user-defined characteristic. `chr` is the flat 0-based
 	 * index in declaration order across config.services[].*.chars[]. */
 	void (*on_write)(uint16_t chr, const uint8_t *data, size_t len, void *user);
+
+	/* ---- Central / GATT client (lib built with the central role) ---- */
+	/* A scan advertising report (addr is 6 bytes, LSB first). */
+	void (*on_scan_result)(const uint8_t *addr, int8_t rssi,
+			       const uint8_t *adv, size_t adv_len, void *user);
+	/* A characteristic found by runtime_ble_client_discover() (uuid is LE). */
+	void (*on_discovered)(uint16_t handle, const uint8_t *uuid, uint8_t uuid_len,
+			      uint16_t props, void *user);
+	/* Value returned by runtime_ble_client_read(). */
+	void (*on_read)(uint16_t handle, const uint8_t *data, size_t len, void *user);
+	/* A notification/indication from a subscribed characteristic. */
+	void (*on_notification)(uint16_t handle, const uint8_t *data, size_t len, void *user);
+
 	/* Optional text log line (NUL-terminated) for the app's console. */
 	void (*on_log)(const char *line, void *user);
 } runtime_ble_callbacks_t;
@@ -106,6 +123,13 @@ typedef struct {
 	 * The array + its uuid buffers must outlive the BLE session (static). */
 	const runtime_ble_service_def_t *services;
 	uint8_t                          num_services;
+
+	/* ---- Role ---- */
+	uint8_t                 role;                 /* RUNTIME_BLE_ROLE_* (0 peripheral, default) */
+	/* Central only: optional 6-byte peer (LSB first) to auto-connect on load;
+	 * NULL -> none (use runtime_ble_scan_start + runtime_ble_connect). */
+	const uint8_t          *peer_address;
+
 	runtime_ble_callbacks_t callbacks;
 	void                   *user;                 /* opaque, passed back to callbacks      */
 } runtime_ble_config_t;
@@ -136,6 +160,36 @@ int runtime_ble_notify(uint16_t chr, const uint8_t *data, size_t len);
 /* The per-device BLE address as 6 bytes, out[0]=LSB. Stable across re-flashes
  * (derived from hwinfo); usable e.g. to build a per-device advertising name. */
 void runtime_ble_addr(uint8_t out[6]);
+
+/* ---- Central / GATT client API ----
+ * Available when the application sets config.role = RUNTIME_BLE_ROLE_CENTRAL and
+ * links a central-capable staticlib (CONFIG_RUNTIME_BLE_CENTRAL=y; otherwise
+ * these return RUNTIME_BLE_ERR_INVALID). Calls are queued to the runtime thread;
+ * results arrive via the callbacks above. One central link at a time. */
+
+/* Start/stop scanning. Each advertising report is delivered to on_scan_result. */
+int runtime_ble_scan_start(void);
+int runtime_ble_scan_stop(void);
+
+/* Connect to a peer by address (6 bytes, LSB first). on_connected fires on success. */
+int runtime_ble_connect(const uint8_t addr[6]);
+
+/* Disconnect the current central link. */
+int runtime_ble_disconnect(void);
+
+/* Discover the characteristics of a service (16- or 128-bit UUID, LE bytes).
+ * Each characteristic found is reported via on_discovered. */
+int runtime_ble_client_discover(const uint8_t *svc_uuid, uint8_t uuid_len);
+
+/* Read a characteristic by attribute handle; the value arrives via on_read. */
+int runtime_ble_client_read(uint16_t handle);
+
+/* Write a characteristic by attribute handle (with response). */
+int runtime_ble_client_write(uint16_t handle, const uint8_t *data, size_t len);
+
+/* Subscribe to a characteristic (enable notify/indicate); incoming values arrive
+ * via on_notification. */
+int runtime_ble_client_subscribe(uint16_t handle);
 
 /* ---- Internal (glue <-> staticlib); do not call from the application ---- */
 void runtime_ble_run(int mode);

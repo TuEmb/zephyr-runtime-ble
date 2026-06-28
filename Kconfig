@@ -39,4 +39,17 @@ config RUNTIME_BLE_THREAD_PRIORITY
 	help
 	  Preemptible priority (K_PRIO_PREEMPT) for the BLE runtime thread.
 
+config RUNTIME_BLE_CENTRAL
+	bool "Enable the central role (scan/connect + GATT client)"
+	default n
+	help
+	  Links the central-capable prebuilt staticlib
+	  (lib/<chip>/libruntime_ble_central.a) and enables the central API
+	  (runtime_ble_scan_start / runtime_ble_connect / runtime_ble_client_*).
+
+	  Off by default so peripheral-only apps stay lean: the central role adds
+	  the scan/central SoftDevice Controller features (extra flash/RAM). The
+	  matching staticlib must exist for the target chip — build it with the
+	  `central` Cargo feature (see rust/README.md).
+
 endif # RUNTIME_BLE

@@ -30,10 +30,19 @@ else()
                       "Add a chip module in rust/src/chip/ and build lib/<chip>/libruntime_ble.a.")
 endif()
 
-set(RTBLE_LIB ${RTBLE_DIR}/lib/${RTBLE_CHIP}/libruntime_ble.a)
+# Select the staticlib variant for the enabled roles. The filename encodes the
+# extra (non-default) roles compiled into it; the default is peripheral + server.
+set(RTBLE_VARIANT "")
+if(CONFIG_RUNTIME_BLE_CENTRAL)
+  string(APPEND RTBLE_VARIANT "_central")
+endif()
+# (Phase 2 will append "_l2cap" here when CONFIG_RUNTIME_BLE_L2CAP is set.)
+
+set(RTBLE_LIB ${RTBLE_DIR}/lib/${RTBLE_CHIP}/libruntime_ble${RTBLE_VARIANT}.a)
 if(NOT EXISTS ${RTBLE_LIB})
   message(FATAL_ERROR "runtime-ble: ${RTBLE_LIB} not found. "
-                      "Build the Rust staticlib first (see rust/README.md).")
+                      "Build the Rust staticlib for these roles (Cargo features "
+                      "'${RTBLE_VARIANT}') — see rust/README.md.")
 endif()
 
 # Prebuilt Rust staticlib (owns the radio; build the app with CONFIG_BT=n).

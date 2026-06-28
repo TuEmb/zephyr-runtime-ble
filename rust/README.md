@@ -72,6 +72,23 @@ Copy-Item "target/$Target/release/libruntime_ble.a" "../lib/$Chip/" -Force
 The Zephyr build (`west build`) then picks up `lib/<chip>/libruntime_ble.a`
 via the module's `CMakeLists.txt`.
 
+## Role variants (optional)
+
+The default lib is the lean **peripheral + GATT-server** build. Extra roles are
+compile-time Cargo features, baked into a separate lib whose filename encodes the
+roles — `CMakeLists.txt` selects it from the matching `CONFIG_RUNTIME_BLE_*`:
+
+| Cargo features | Staged as | Selected by |
+|---|---|---|
+| (none) | `libruntime_ble.a` | default |
+| `central` | `libruntime_ble_central.a` | `CONFIG_RUNTIME_BLE_CENTRAL=y` |
+
+Add the feature to the build and stage under the matching name, e.g. on Linux:
+```sh
+cargo +1.92 build --release --no-default-features --features "$CHIP,central" --target "$TARGET"
+cp target/$TARGET/release/libruntime_ble.a ../lib/$CHIP/libruntime_ble_central.a
+```
+
 ## Layout
 
 ```

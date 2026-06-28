@@ -35,6 +35,11 @@ critical-section = { version = "1.2", optional = true }
 
 [features]
 default = []
+# Optional roles, baked into the staticlib at build time (the SDC role support is
+# a compile-time choice). Off by default so the default lib is the lean
+# peripheral + GATT-server build; enabling one changes the staged lib filename
+# (e.g. `--features nrf54l15,central` -> stage as libruntime_ble_central.a).
+central = []   # scan/connect + GATT client (RUNTIME_BLE_ROLE_CENTRAL)
 # Common radio dependencies, shared by every chip feature below.
 _radio = [
     "dep:embassy-executor",
