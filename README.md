@@ -122,6 +122,22 @@ Characteristics are addressed by **flat index** (declaration order). Callbacks:
 `on_connected`, `on_disconnected`, `on_write(chr, …)` (or `on_data` for the
 built-in NUS RX), `on_log`. They run on the BLE thread — keep them short.
 
+## Roles: peripheral (default) and central
+By default the runtime is a **peripheral** (advertise + GATT server, above). It
+can also be a **central / GATT client** — build the central-capable lib
+(`CONFIG_RUNTIME_BLE_CENTRAL=y`, links `libruntime_ble_central.a`) and set
+`config.role = RUNTIME_BLE_ROLE_CENTRAL`:
+```c
+runtime_ble_connect(addr);              // or config.peer_address to auto-connect
+runtime_ble_client_discover(svc, 16);   // -> on_discovered(handle, …)
+runtime_ble_client_subscribe(handle);   // -> on_notification(handle, …)
+runtime_ble_client_write(handle, buf, n);
+runtime_ble_client_read(handle);        // -> on_read(handle, …)
+```
+See [`examples/nrf54l15_central/`](examples/nrf54l15_central/) (HW-verified
+against the peripheral echo example). The role is feature-gated so peripheral-
+only apps stay on the lean default lib (see [`rust/README.md`](rust/README.md)).
+
 ## Adding a chip
 1. Add a `<chip> = ["_radio", "embassy-nrf/<chip>", "nrf-sdc/<chip>"]` feature
    in `rust/Cargo.toml`.
