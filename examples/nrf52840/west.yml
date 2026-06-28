@@ -1,0 +1,28 @@
+# Standalone west manifest for the runtime-ble "nrf52840" example.
+#
+# The example is independent of the library repo: it pulls Zephyr AND the
+# zephyr-runtime-ble module via git, so it builds with NO -DZEPHYR_EXTRA_MODULES
+# (west auto-discovers zephyr-runtime-ble as a module via its zephyr/module.yml).
+#
+#   west init -l nrf52840        # use this example as the manifest (it must be a git repo)
+#   west update            # clones Zephyr v4.4.1 + zephyr-runtime-ble
+#   west build -b <board> nrf52840
+manifest:
+  remotes:
+    - name: zephyrproject
+      url-base: https://github.com/zephyrproject-rtos
+    - name: tuemb
+      url-base: https://github.com/TuEmb
+
+  projects:
+    - name: zephyr
+      remote: zephyrproject
+      revision: v4.4.1
+      import: true
+    - name: zephyr-runtime-ble
+      remote: tuemb
+      revision: main
+      path: modules/zephyr-runtime-ble
+
+  self:
+    path: nrf52840

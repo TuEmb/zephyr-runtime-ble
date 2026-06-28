@@ -59,27 +59,35 @@ Notes:
 ## Build
 
 ### 1. Prerequisites
-- **Zephyr SDK 1.0.x** + Zephyr 4.4.1 workspace (`west`), CMake, Ninja, Python.
+- **west**, **Zephyr SDK 1.0.x** (or a `gnuarmemb` arm-none-eabi toolchain), CMake, Ninja, Python.
 - **Rust 1.92** (1.90 miscompiles nrf-sdc): `rustup toolchain install 1.92`,
   `rustup target add thumbv8m.main-none-eabi thumbv7em-none-eabihf`.
 - **LLVM/clang** (for the nrf-sdc/nrf-mpsl bindgen step).
 
-### 2. Build the per-chip staticlib (once per chip / per lib change)
-```powershell
-# Windows
-.\scripts\build_lib.ps1 -Chip nrf54l15
-```
-This builds `rust/` with the `nrf54l15` feature and stages
-`lib/nrf54l15/libruntime_ble.a`. Re-run after editing anything under `rust/`.
+### 2. Examples are standalone west apps (no `-DZEPHYR_EXTRA_MODULES`)
+Each `examples/<chip>/` is an **independent application** with its own
+[`west.yml`](examples/nrf54l15/west.yml) that pulls **Zephyr 4.4.1 + the
+`zephyr-runtime-ble` module via git**. west auto-discovers runtime-ble as a Zephyr
+module (it has `zephyr/module.yml`), so nothing is passed on the command line.
 
-### 3. Build an example app (Zephyr 4.4.1)
-Run from your Zephyr 4.4.1 workspace; register this directory as an extra module:
+Use an example as its own git repo (e.g. copy `examples/nrf54l15` out), then:
 ```sh
-west build -p always -b xiao_nrf54l15/nrf54l15/cpuapp <abs>/runtime-ble/examples/nrf54l15 \
-    -- -DZEPHYR_EXTRA_MODULES=<abs>/runtime-ble
+west init -l nrf54l15      # the example dir is the manifest repo
+west update                # clones Zephyr v4.4.1 + zephyr-runtime-ble (+ its prebuilt libs)
+west zephyr-export
+west build -p always -b xiao_nrf54l15/nrf54l15/cpuapp nrf54l15
 west flash
 ```
-> nRF54L15 DK: use `-b nrf54l15dk/nrf54l15/cpuapp`.
+> Board per chip: see the table above (e.g. `nrf54l15dk/nrf54l10/cpuapp`, `nrf52840dk/nrf52840`).
+> With a `gnuarmemb` toolchain add `-- -DZEPHYR_TOOLCHAIN_VARIANT=gnuarmemb -DGNUARMEMB_TOOLCHAIN_PATH=<dir>`.
+> Pin the runtime-ble version with the `revision:` in the example's `west.yml`.
+
+### 3. (Re)building the per-chip staticlib
+The prebuilt `lib/<chip>/libruntime_ble.a` is committed (so `west update` brings it). Rebuild it
+only after editing `rust/`, from a clone of this library repo:
+```powershell
+.\scripts\build_lib.ps1 -Chip nrf54l15   # stages lib/nrf54l15/libruntime_ble.a
+```
 
 ## Try it
 Scan with the **nRF Connect** mobile app for `RUNTIME-BLE`, connect, find the
