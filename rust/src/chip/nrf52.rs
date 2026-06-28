@@ -19,7 +19,7 @@ use nrf_sdc::mpsl::MultiprotocolServiceLayer;
 use nrf_sdc::{self as sdc, mpsl};
 use trouble_host::prelude::*;
 
-use super::{device_address, log, run_until_unload, server_for, Resources};
+use super::{device_address, log, serve_session, Resources};
 use crate::RuntimeCfg;
 
 const L2CAP_TXQ: u8 = 4;
@@ -81,12 +81,6 @@ pub(crate) fn run(cfg: Option<&'static RuntimeCfg>, _mode: c_int) {
         Some(c) => c,
         None => return,
     };
-    let name = unsafe { super::cstr_or(cfg.device_name, "RUNTIME-BLE") };
-    let server = match server_for(name) {
-        Some(s) => s,
-        None => return,
-    };
-
     let p = unsafe { embassy_nrf::Peripherals::steal() };
 
     let mpsl_p = mpsl::Peripherals::new(p.RTC0, p.TIMER0, p.TEMP, p.PPI_CH19, p.PPI_CH30, p.PPI_CH31);
@@ -117,7 +111,7 @@ pub(crate) fn run(cfg: Option<&'static RuntimeCfg>, _mode: c_int) {
         .build();
 
     log(cfg, c"[runtime-ble] loaded on heap; advertising");
-    run_until_unload(mpsl, &stack, server, cfg);
+    serve_session(mpsl, &stack, cfg);
 
     drop(stack);
     unsafe {

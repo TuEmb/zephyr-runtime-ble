@@ -1,4 +1,5 @@
-//! nRF54L15 radio bring-up (feature `nrf54l15`).
+//! nRF54L radio bring-up (features `nrf54l15` / `nrf54l10` / `nrf54l05` /
+//! `nrf54lm20` — all share the same nRF54L peripherals/interrupts).
 //!
 //! Builds MPSL + the SoftDevice Controller on the Zephyr heap, wires the
 //! MPSL/SDC interrupts (the C shims below are connected via IRQ_CONNECT in
@@ -13,7 +14,7 @@ use nrf_sdc::mpsl::MultiprotocolServiceLayer;
 use nrf_sdc::{self as sdc, mpsl};
 use trouble_host::prelude::*;
 
-use super::{device_address, log, run_until_unload, server_for, Resources};
+use super::{device_address, log, serve_session, Resources};
 use crate::RuntimeCfg;
 
 const L2CAP_TXQ: u8 = 4;
@@ -81,12 +82,6 @@ pub(crate) fn run(cfg: Option<&'static RuntimeCfg>, _mode: c_int) {
         Some(c) => c,
         None => return,
     };
-    let name = unsafe { super::cstr_or(cfg.device_name, "RUNTIME-BLE") };
-    let server = match server_for(name) {
-        Some(s) => s,
-        None => return,
-    };
-
     // Zephyr already configured clocks/regulators; steal the peripherals.
     let p = unsafe { embassy_nrf::Peripherals::steal() };
 
@@ -122,7 +117,7 @@ pub(crate) fn run(cfg: Option<&'static RuntimeCfg>, _mode: c_int) {
         .build();
 
     log(cfg, c"[runtime-ble] loaded on heap; advertising");
-    run_until_unload(mpsl, &stack, server, cfg);
+    serve_session(mpsl, &stack, cfg);
 
     // Teardown: drop the Stack first (SoftdeviceController Drop -> sdc_disable),
     // then reclaim every per-session allocation.
