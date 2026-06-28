@@ -1,0 +1,24 @@
+zephyr-runtime-ble
+Copyright 2026 zephyr-runtime-ble contributors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+The prebuilt static libraries under lib/<chip>/ are produced from the Rust
+crate in rust/ and bundle third-party components, each under its own license:
+
+  - Nordic SoftDevice Controller and MPSL (via the nrf-sdc / nrf-mpsl crates):
+    binary redistributed under the Nordic Semiconductor nRF software license
+    (5-Clause Nordic). See https://github.com/alexmoon/nrf-sdc and the Nordic
+    nRF Connect SDK for the full terms.
+  - TrouBLE (BLE host): Apache-2.0 OR MIT — https://github.com/embassy-rs/trouble
+    (built from the fork https://github.com/TuEmb/trouble).
+  - Embassy (embassy-nrf / embassy-time / embassy-sync / ...): Apache-2.0 OR MIT
+    — https://github.com/embassy-rs/embassy
+  - nrf-sdc / nrf-mpsl Rust bindings: Apache-2.0 OR MIT
+    — https://github.com/alexmoon/nrf-sdc
+
+The Zephyr glue (glue/) and C API (include/) target the Zephyr RTOS, which is
+licensed under Apache-2.0 (https://github.com/zephyrproject-rtos/zephyr).
+
+Redistribution of the prebuilt libraries is subject to the Nordic SoftDevice
+Controller license terms in addition to this project's Apache-2.0 license.

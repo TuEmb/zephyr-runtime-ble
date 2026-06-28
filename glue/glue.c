@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: Apache-2.0 */
 /*
  * glue.c — Zephyr side of the trouble-based loadable BLE runtime.
  *
