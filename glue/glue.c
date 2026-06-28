@@ -108,7 +108,7 @@ int runtime_ble_load(void)
 	irq_enable(TIMER10_IRQn);
 	irq_enable(GRTC_3_IRQn);
 	irq_enable(SWI00_IRQn);
-#elif defined(CONFIG_SOC_SERIES_NRF52)
+#elif defined(CONFIG_SOC_SERIES_NRF52) || defined(CONFIG_SOC_SERIES_NRF52X)
 	irq_enable(RADIO_IRQn);
 	irq_enable(TIMER0_IRQn);
 	irq_enable(RTC0_IRQn);
@@ -139,7 +139,7 @@ int runtime_ble_unload(void)
 	irq_disable(TIMER10_IRQn);
 	irq_disable(GRTC_3_IRQn);
 	irq_disable(SWI00_IRQn);
-#elif defined(CONFIG_SOC_SERIES_NRF52)
+#elif defined(CONFIG_SOC_SERIES_NRF52) || defined(CONFIG_SOC_SERIES_NRF52X)
 	irq_disable(RADIO_IRQn);
 	irq_disable(TIMER0_IRQn);
 	irq_disable(RTC0_IRQn);
@@ -159,7 +159,7 @@ extern void runtime_irq_radio(void);
 extern void runtime_irq_timer10(void);
 extern void runtime_irq_grtc3(void);
 extern void runtime_irq_swi00(void);
-#elif defined(CONFIG_SOC_SERIES_NRF52)
+#elif defined(CONFIG_SOC_SERIES_NRF52) || defined(CONFIG_SOC_SERIES_NRF52X)
 extern void runtime_irq_radio(void);
 extern void runtime_irq_timer0(void);
 extern void runtime_irq_rtc0(void);
@@ -179,7 +179,7 @@ static int runtime_glue_init(void)
 	IRQ_CONNECT(TIMER10_IRQn, 0, runtime_irq_timer10, NULL, 0);
 	IRQ_CONNECT(GRTC_3_IRQn, 0, runtime_irq_grtc3, NULL, 0);
 	IRQ_CONNECT(SWI00_IRQn, 4, runtime_irq_swi00, NULL, 0);
-#elif defined(CONFIG_SOC_SERIES_NRF52)
+#elif defined(CONFIG_SOC_SERIES_NRF52) || defined(CONFIG_SOC_SERIES_NRF52X)
 	/* CLOCK_POWER (POWER_CLOCK) is owned by Zephyr's clock driver — ceded. */
 	IRQ_CONNECT(RADIO_IRQn, 0, runtime_irq_radio, NULL, 0);
 	IRQ_CONNECT(TIMER0_IRQn, 0, runtime_irq_timer0, NULL, 0);
