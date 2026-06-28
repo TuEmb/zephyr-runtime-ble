@@ -1,0 +1,28 @@
+# Standalone west manifest for the runtime-ble central / GATT-client example.
+#
+#   west init -l nrf54l15_central
+#   west update              # clones Zephyr + zephyr-runtime-ble
+#   west build -b xiao_nrf54l15/nrf54l15/cpuapp nrf54l15_central
+#   west flash
+manifest:
+  remotes:
+    - name: zephyrproject
+      url-base: https://github.com/zephyrproject-rtos
+    - name: tuemb
+      url-base: https://github.com/TuEmb
+
+  projects:
+    # Not tied to a Zephyr version: the module uses only stable APIs + a prebuilt
+    # staticlib (verified on 4.1.x-4.4.x). This is just the release this example
+    # pins -- change it to whatever you build against.
+    - name: zephyr
+      remote: zephyrproject
+      revision: v4.4.1
+      import: true
+    - name: zephyr-runtime-ble
+      remote: tuemb
+      revision: main
+      path: modules/zephyr-runtime-ble
+
+  self:
+    path: nrf54l15_central
