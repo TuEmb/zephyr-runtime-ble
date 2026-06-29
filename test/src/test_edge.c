@@ -19,6 +19,14 @@ static void *edge_setup(void)
 	return NULL;
 }
 
+static void on_client_status(uint8_t op, int8_t status, uint16_t handle, void *user)
+{
+	ARG_UNUSED(op);
+	ARG_UNUSED(status);
+	ARG_UNUSED(handle);
+	ARG_UNUSED(user);
+}
+
 ZTEST_SUITE(runtime_ble_edge, NULL, edge_setup, NULL, NULL, NULL);
 
 ZTEST(runtime_ble_edge, test_init_null_is_rejected)
@@ -91,6 +99,17 @@ ZTEST(runtime_ble_edge, test_central_descriptor_access_requires_central_lib)
 	zassert_equal(runtime_ble_client_write_descriptor(1, buf, sizeof(buf)),
 		      RUNTIME_BLE_ERR_INVALID,
 		      "default peripheral lib must reject descriptor write");
+}
+
+ZTEST(runtime_ble_edge, test_client_status_callback_config_init)
+{
+	runtime_ble_config_t cfg = *test_base_cfg();
+
+	cfg.callbacks.on_client_status = on_client_status;
+	zassert_equal(runtime_ble_init(&cfg), RUNTIME_BLE_OK, "client status callback init failed");
+	test_load_settled();
+	zassert_equal(runtime_ble_unload(), RUNTIME_BLE_OK, "cleanup unload failed");
+	zassert_equal(runtime_ble_init(test_base_cfg()), RUNTIME_BLE_OK, "restore base cfg failed");
 }
 
 ZTEST(runtime_ble_edge, test_central_discover_all_requires_central_lib)

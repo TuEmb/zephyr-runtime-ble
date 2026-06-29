@@ -134,6 +134,11 @@ static void on_read(uint16_t h, const uint8_t *d, size_t n, void *u)
 	ARG_UNUSED(d);
 	printk("[app] READ handle=%u len=%u\n", h, (unsigned int)n);
 }
+static void on_client_status(uint8_t op, int8_t status, uint16_t handle, void *u)
+{
+	ARG_UNUSED(u);
+	printk("[app] client op=%u status=%d handle=%u\n", op, status, handle);
+}
 static void on_att_mtu(uint16_t att_mtu, void *u)
 {
 	ARG_UNUSED(u);
@@ -170,6 +175,7 @@ int main(void)
 			.on_descriptor = on_descriptor,
 			.on_notification = on_notification,
 			.on_read = on_read,
+			.on_client_status = on_client_status,
 			.on_att_mtu = on_att_mtu,
 			.on_frame_space = on_frame_space,
 			.on_connection_rate = on_connection_rate,

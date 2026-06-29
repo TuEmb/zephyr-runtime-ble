@@ -186,6 +186,9 @@ pub struct RuntimeBleCallbacks {
     pub on_l2cap_data: Option<extern "C" fn(data: *const u8, len: usize, user: *mut c_void)>,
     /// L2CAP: channel closed.
     pub on_l2cap_disconnected: Option<extern "C" fn(user: *mut c_void)>,
+    /// Central: command completion status.
+    pub on_client_status:
+        Option<extern "C" fn(op: u8, status: i8, handle: u16, user: *mut c_void)>,
 }
 
 /// C ABI: one read-only descriptor (must match runtime_ble.h).

@@ -254,6 +254,8 @@ Use `runtime_ble_client_read_blob()` to continue reading long attributes from a
 specific ATT offset; returned bytes still arrive through `on_read`.
 Use the descriptor read/write helpers when `on_descriptor` has reported a
 descriptor handle; descriptor reads also return through `on_read`.
+Use `on_client_status` to observe completion/failure of GATT client commands;
+`op` is `RUNTIME_BLE_CLIENT_OP_*` and `status` is `RUNTIME_BLE_CLIENT_STATUS_*`.
 See [`examples/gatt_client/`](examples/gatt_client/) (HW-verified
 against the peripheral echo example). The role is feature-gated so peripheral-
 only apps stay on the lean default lib (see [`rust/README.md`](rust/README.md)).

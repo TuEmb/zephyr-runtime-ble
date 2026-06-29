@@ -108,6 +108,21 @@ extern "C" {
 
 #define RUNTIME_BLE_SECURITY_FLAG_BONDED (1u << 0)
 
+/* GATT client operation status, emitted through on_client_status. */
+#define RUNTIME_BLE_CLIENT_STATUS_OK     0
+#define RUNTIME_BLE_CLIENT_STATUS_FAILED (-1)
+
+#define RUNTIME_BLE_CLIENT_OP_DISCOVER_SERVICES    1
+#define RUNTIME_BLE_CLIENT_OP_DISCOVER_CHARS       2
+#define RUNTIME_BLE_CLIENT_OP_DISCOVER_ALL         3
+#define RUNTIME_BLE_CLIENT_OP_DISCOVER_DESCRIPTORS 4
+#define RUNTIME_BLE_CLIENT_OP_READ                 5
+#define RUNTIME_BLE_CLIENT_OP_READ_BLOB            6
+#define RUNTIME_BLE_CLIENT_OP_WRITE                7
+#define RUNTIME_BLE_CLIENT_OP_WRITE_NO_RSP         8
+#define RUNTIME_BLE_CLIENT_OP_SUBSCRIBE            9
+#define RUNTIME_BLE_CLIENT_OP_SUBSCRIBE_INDICATE   10
+
 /* Opaque bond blob format used by on_bond_load/on_bond_store. Store the bytes as
  * given; the first byte is a runtime-managed format version. */
 #define RUNTIME_BLE_BOND_BLOB_MAX 43
@@ -255,6 +270,11 @@ typedef struct {
 	void (*on_l2cap_data)(const uint8_t *data, size_t len, void *user);
 	/* The L2CAP channel closed. */
 	void (*on_l2cap_disconnected)(void *user);
+
+	/* Optional GATT client command completion. op is RUNTIME_BLE_CLIENT_OP_*;
+	 * status is RUNTIME_BLE_CLIENT_STATUS_*; handle is the relevant attribute
+	 * handle, or 0 for service/whole-database discovery. */
+	void (*on_client_status)(uint8_t op, int8_t status, uint16_t handle, void *user);
 } runtime_ble_callbacks_t;
 
 /*

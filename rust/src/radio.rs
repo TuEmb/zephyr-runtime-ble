@@ -1481,6 +1481,11 @@ async fn client_session(
                     let packed = CENTRAL_HANDLE.load(Ordering::Acquire);
                     let h = packed as u16;
                     let offset = (packed >> 16) as u16;
+                    let op = if cmd == CCMD_READ_BLOB {
+                        CLIENT_OP_READ_BLOB
+                    } else {
+                        CLIENT_OP_READ
+                    };
                     let mut buf = [0u8; VALUE_LEN];
                     let read = if cmd == CCMD_READ_BLOB {
                         client.read_handle_blob(h, offset, &mut buf).await
@@ -1492,8 +1497,12 @@ async fn client_session(
                             if let Some(cb) = cfg.callbacks.on_read {
                                 cb(h, buf.as_ptr(), n.min(VALUE_LEN), cfg.user);
                             }
+                            emit_client_status(cfg, op, CLIENT_STATUS_OK, h);
                         }
-                        Err(_) => log_str(cfg, "[central] read failed\0"),
+                        Err(_) => {
+                            log_str(cfg, "[central] read failed\0");
+                            emit_client_status(cfg, op, CLIENT_STATUS_FAILED, h);
+                        }
                     }
                 }
                 cmd @ (CCMD_WRITE | CCMD_WRITE_NO_RSP) => {
@@ -1510,11 +1519,26 @@ async fn client_session(
                             len,
                         );
                     }
-                    if cmd == CCMD_WRITE_NO_RSP {
-                        let _ = client.write_handle_without_response(h, &wbuf[..len]).await;
+                    let op = if cmd == CCMD_WRITE_NO_RSP {
+                        CLIENT_OP_WRITE_NO_RSP
                     } else {
-                        let _ = client.write_handle(h, &wbuf[..len]).await;
-                    }
+                        CLIENT_OP_WRITE
+                    };
+                    let result = if cmd == CCMD_WRITE_NO_RSP {
+                        client.write_handle_without_response(h, &wbuf[..len]).await
+                    } else {
+                        client.write_handle(h, &wbuf[..len]).await
+                    };
+                    emit_client_status(
+                        cfg,
+                        op,
+                        if result.is_ok() {
+                            CLIENT_STATUS_OK
+                        } else {
+                            CLIENT_STATUS_FAILED
+                        },
+                        h,
+                    );
                 }
                 cmd @ (CCMD_SUBSCRIBE | CCMD_SUBSCRIBE_INDICATE) => {
                     let h = CENTRAL_HANDLE.load(Ordering::Acquire) as u16;
@@ -1529,7 +1553,21 @@ async fn client_session(
                     } else {
                         [0x01, 0x00]
                     };
-                    let _ = client.write_handle(cccd, &value).await;
+                    let result = client.write_handle(cccd, &value).await;
+                    emit_client_status(
+                        cfg,
+                        if cmd == CCMD_SUBSCRIBE_INDICATE {
+                            CLIENT_OP_SUBSCRIBE_INDICATE
+                        } else {
+                            CLIENT_OP_SUBSCRIBE
+                        },
+                        if result.is_ok() {
+                            CLIENT_STATUS_OK
+                        } else {
+                            CLIENT_STATUS_FAILED
+                        },
+                        h,
+                    );
                 }
                 _ => {}
             }
@@ -1556,6 +1594,38 @@ async fn client_session(
     // client.task() drives ATT responses + notifications; it returns when the
     // link drops, ending the session.
     select3(client.task(), join(commands, notifs), wait_unload()).await;
+}
+
+#[cfg(feature = "central")]
+const CLIENT_STATUS_OK: i8 = 0;
+#[cfg(feature = "central")]
+const CLIENT_STATUS_FAILED: i8 = -1;
+#[cfg(feature = "central")]
+const CLIENT_OP_DISCOVER_SERVICES: u8 = 1;
+#[cfg(feature = "central")]
+const CLIENT_OP_DISCOVER_CHARS: u8 = 2;
+#[cfg(feature = "central")]
+const CLIENT_OP_DISCOVER_ALL: u8 = 3;
+#[cfg(feature = "central")]
+const CLIENT_OP_DISCOVER_DESCRIPTORS: u8 = 4;
+#[cfg(feature = "central")]
+const CLIENT_OP_READ: u8 = 5;
+#[cfg(feature = "central")]
+const CLIENT_OP_READ_BLOB: u8 = 6;
+#[cfg(feature = "central")]
+const CLIENT_OP_WRITE: u8 = 7;
+#[cfg(feature = "central")]
+const CLIENT_OP_WRITE_NO_RSP: u8 = 8;
+#[cfg(feature = "central")]
+const CLIENT_OP_SUBSCRIBE: u8 = 9;
+#[cfg(feature = "central")]
+const CLIENT_OP_SUBSCRIBE_INDICATE: u8 = 10;
+
+#[cfg(feature = "central")]
+fn emit_client_status(cfg: &RuntimeCfg, op: u8, status: i8, handle: u16) {
+    if let Some(cb) = cfg.callbacks.on_client_status {
+        cb(op, status, handle, cfg.user);
+    }
 }
 
 #[cfg(feature = "central")]
@@ -1606,8 +1676,12 @@ async fn client_discover_all(client: &ClientP<'_>, store: &ClientCharStore, cfg:
                 report_service(s, cfg);
                 report_service_chars(client, s, store, cfg).await;
             }
+            emit_client_status(cfg, CLIENT_OP_DISCOVER_ALL, CLIENT_STATUS_OK, 0);
         }
-        Err(_) => log_str(cfg, "[central] discover all failed\0"),
+        Err(_) => {
+            log_str(cfg, "[central] discover all failed\0");
+            emit_client_status(cfg, CLIENT_OP_DISCOVER_ALL, CLIENT_STATUS_FAILED, 0);
+        }
     }
 }
 
@@ -1618,8 +1692,12 @@ async fn client_discover_services(client: &ClientP<'_>, cfg: &RuntimeCfg) {
             for s in svcs.iter() {
                 report_service(s, cfg);
             }
+            emit_client_status(cfg, CLIENT_OP_DISCOVER_SERVICES, CLIENT_STATUS_OK, 0);
         }
-        Err(_) => log_str(cfg, "[central] discover services failed\0"),
+        Err(_) => {
+            log_str(cfg, "[central] discover services failed\0");
+            emit_client_status(cfg, CLIENT_OP_DISCOVER_SERVICES, CLIENT_STATUS_FAILED, 0);
+        }
     }
 }
 
@@ -1633,12 +1711,14 @@ async fn client_discover(client: &ClientP<'_>, store: &ClientCharStore, cfg: &Ru
         Ok(s) => s,
         Err(_) => {
             log_str(cfg, "[central] discover: service not found\0");
+            emit_client_status(cfg, CLIENT_OP_DISCOVER_CHARS, CLIENT_STATUS_FAILED, 0);
             return;
         }
     };
     for s in svcs.iter() {
         report_service_chars(client, s, store, cfg).await;
     }
+    emit_client_status(cfg, CLIENT_OP_DISCOVER_CHARS, CLIENT_STATUS_OK, 0);
 }
 
 #[cfg(feature = "central")]
@@ -1647,9 +1727,15 @@ async fn client_discover_descriptors(client: &ClientP<'_>, cfg: &RuntimeCfg) {
     let start = (range >> 16) as u16;
     let end = range as u16;
     if start == 0 || end < start {
+        emit_client_status(
+            cfg,
+            CLIENT_OP_DISCOVER_DESCRIPTORS,
+            CLIENT_STATUS_FAILED,
+            start,
+        );
         return;
     }
-    let _ = client
+    let result = client
         .find_information(start, end, |handle, uuid| {
             if let Some(cb) = cfg.callbacks.on_descriptor {
                 let raw = uuid.as_raw();
@@ -1658,6 +1744,16 @@ async fn client_discover_descriptors(client: &ClientP<'_>, cfg: &RuntimeCfg) {
             core::ops::ControlFlow::<()>::Continue(())
         })
         .await;
+    emit_client_status(
+        cfg,
+        CLIENT_OP_DISCOVER_DESCRIPTORS,
+        if result.is_ok() {
+            CLIENT_STATUS_OK
+        } else {
+            CLIENT_STATUS_FAILED
+        },
+        start,
+    );
 }
 
 /// Run a central connection: the GATT client, plus (when l2cap is enabled and a
