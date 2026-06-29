@@ -146,15 +146,18 @@ extern "C" {
 #define RUNTIME_BLE_PERM_WRITE_AUTH     (1u << 3)
 #define RUNTIME_BLE_PERM_CCCD_ENCRYPT   (1u << 4)
 #define RUNTIME_BLE_PERM_CCCD_AUTH      (1u << 5)
+/* Descriptor-only: allow unencrypted writes to a static descriptor value. */
+#define RUNTIME_BLE_PERM_WRITE_ALLOWED  (1u << 6)
 
-/* One read-only descriptor. `uuid` is little-endian, 2 bytes (16-bit) or 16
- * (128-bit). `value` points to static bytes. */
+/* One descriptor. `uuid` is little-endian, 2 bytes (16-bit) or 16 (128-bit).
+ * `value` points to initial bytes. Set RUNTIME_BLE_PERM_WRITE_ALLOWED, or a
+ * RUNTIME_BLE_PERM_WRITE_* security bit, to make the descriptor writable. */
 typedef struct {
 	const uint8_t *uuid;
 	uint8_t        uuid_len;   /* 2 or 16 */
 	const uint8_t *value;
 	uint16_t       value_len;
-	uint16_t       permissions;/* RUNTIME_BLE_PERM_READ_* bitmask */
+	uint16_t       permissions;/* RUNTIME_BLE_PERM_* bitmask */
 } runtime_ble_desc_def_t;
 
 /* One characteristic. `uuid` is little-endian, 2 bytes (16-bit) or 16 (128-bit). */

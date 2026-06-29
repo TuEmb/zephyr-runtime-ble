@@ -204,6 +204,7 @@ const C_PERM_WRITE_ENCRYPT: u16 = 1 << 2;
 const C_PERM_WRITE_AUTH: u16 = 1 << 3;
 const C_PERM_CCCD_ENCRYPT: u16 = 1 << 4;
 const C_PERM_CCCD_AUTH: u16 = 1 << 5;
+const C_PERM_WRITE_ALLOWED: u16 = 1 << 6;
 
 fn map_props(props: u16) -> CharacteristicProps {
     let mut b: u8 = 0;
@@ -239,8 +240,17 @@ fn descriptor_permissions(mask: u16) -> AttPermissions {
     AttPermissions {
         read: map_permission(mask, C_PERM_READ_ENCRYPT, C_PERM_READ_AUTH)
             .unwrap_or(PermissionLevel::Allowed),
-        write: PermissionLevel::NotAllowed,
+        write: if mask & C_PERM_WRITE_ALLOWED != 0 {
+            PermissionLevel::Allowed
+        } else {
+            map_permission(mask, C_PERM_WRITE_ENCRYPT, C_PERM_WRITE_AUTH)
+                .unwrap_or(PermissionLevel::NotAllowed)
+        },
     }
+}
+
+fn descriptor_is_writable(mask: u16) -> bool {
+    mask & (C_PERM_WRITE_ALLOWED | C_PERM_WRITE_ENCRYPT | C_PERM_WRITE_AUTH) != 0
 }
 
 // Reverse of map_props: BLE CharacteristicProp bits -> C property bits, for
@@ -398,11 +408,16 @@ fn build_gatt(cfg: &RuntimeCfg, name: &'static str) -> Option<Gatt> {
                         } else {
                             unsafe { core::slice::from_raw_parts(d.value, d.value_len as usize) }
                         };
-                        chr.add_descriptor_ro::<[u8], _>(
-                            unsafe { uuid_from(d.uuid, d.uuid_len) },
-                            descriptor_permissions(d.permissions).read,
-                            value,
-                        );
+                        let uuid = unsafe { uuid_from(d.uuid, d.uuid_len) };
+                        let permissions = descriptor_permissions(d.permissions);
+                        if descriptor_is_writable(d.permissions) {
+                            let len = value.len().min(VALUE_LEN);
+                            let mut init: heapless::Vec<u8, VALUE_LEN> = heapless::Vec::new();
+                            let _ = init.extend_from_slice(&value[..len]);
+                            chr.add_descriptor(uuid, permissions, init, alloc_store(&mut stores));
+                        } else {
+                            chr.add_descriptor_ro::<[u8], _>(uuid, permissions.read, value);
+                        }
                     }
                 }
                 chars.push(chr.build());

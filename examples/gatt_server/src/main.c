@@ -27,7 +27,14 @@ static const uint8_t rx_uuid[16]  = {0x9e, 0xca, 0xdc, 0x24, 0x0e, 0xe5, 0xa9, 0
 static const uint8_t tx_uuid[16]  = {0x9e, 0xca, 0xdc, 0x24, 0x0e, 0xe5, 0xa9, 0xe0,
 				     0x93, 0xf3, 0xa3, 0xb5, 0x03, 0x00, 0x4c, 0xe5};
 static const uint8_t user_desc_uuid[2] = {0x01, 0x29}; /* Characteristic User Description */
+static const uint8_t rw_desc_uuid[2] = {0x80, 0xff};
+static const uint8_t rx_desc[] = "client note";
 static const uint8_t tx_desc[] = "Echo notifications";
+static const runtime_ble_desc_def_t rx_descs[] = {
+	{ .uuid = rw_desc_uuid, .uuid_len = sizeof(rw_desc_uuid),
+	  .value = rx_desc, .value_len = sizeof(rx_desc) - 1,
+	  .permissions = RUNTIME_BLE_PERM_WRITE_ALLOWED },
+};
 static const runtime_ble_desc_def_t tx_descs[] = {
 	{ .uuid = user_desc_uuid, .uuid_len = sizeof(user_desc_uuid),
 	  .value = tx_desc, .value_len = sizeof(tx_desc) - 1 },
@@ -39,7 +46,9 @@ static const runtime_ble_desc_def_t tx_descs[] = {
 
 static const runtime_ble_char_def_t my_chars[] = {
 	{ .uuid = rx_uuid, .uuid_len = 16,
-	  .props = RUNTIME_BLE_PROP_WRITE | RUNTIME_BLE_PROP_WRITE_NR, .max_len = 244 },
+	  .props = RUNTIME_BLE_PROP_WRITE | RUNTIME_BLE_PROP_WRITE_NR, .max_len = 244,
+	  .descriptors = rx_descs,
+	  .num_descriptors = sizeof(rx_descs) / sizeof(rx_descs[0]) },
 	{ .uuid = tx_uuid, .uuid_len = 16,
 	  .props = RUNTIME_BLE_PROP_NOTIFY, .max_len = 244,
 	  .descriptors = tx_descs,

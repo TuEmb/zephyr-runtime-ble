@@ -164,9 +164,11 @@ when a peer writes a CCCD, `on_conn_params`, `on_phy_update`,
 `on_rssi`, `on_security_event`, `on_bond_load`, `on_bond_store`,
 `on_oob_request`, `on_oob_local_data`, `on_log`. They run on the BLE thread —
 keep them short.
-Characteristics may include static read-only descriptors, such as User
-Description (`0x2901`); descriptor UUID/value buffers must remain valid for the
-loaded session.
+Characteristics may include static descriptors, such as User Description
+(`0x2901`); descriptor UUID/value buffers must remain valid for the loaded
+session. Descriptors are read-only by default; set
+`RUNTIME_BLE_PERM_WRITE_ALLOWED` or a `RUNTIME_BLE_PERM_WRITE_*` security bit in
+the descriptor permissions to make the runtime keep a writable descriptor value.
 
 Use `runtime_ble_indicate()` when a characteristic advertises
 `RUNTIME_BLE_PROP_INDICATE` and the app needs ATT confirmation semantics. The
