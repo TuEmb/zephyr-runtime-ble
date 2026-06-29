@@ -1516,6 +1516,9 @@ async fn client_session(
                     let d = n.as_ref();
                     cb(n.handle(), d.as_ptr(), d.len(), cfg.user);
                 }
+                if n.is_indication() {
+                    let _ = client.confirm_indication().await;
+                }
             },
             None => core::future::pending::<()>().await,
         }

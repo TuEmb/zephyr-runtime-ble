@@ -232,6 +232,7 @@ The central client tracks up to 8 primary services and 32 discovered
 characteristics for follow-up descriptor discovery and CCCD subscription.
 Use `runtime_ble_client_subscribe_indicate()` for peers that expose indications
 instead of notifications; both deliver incoming values via `on_notification`.
+Incoming client indications are confirmed automatically after the callback runs.
 Use `runtime_ble_client_read_blob()` to continue reading long attributes from a
 specific ATT offset; returned bytes still arrive through `on_read`.
 See [`examples/gatt_client/`](examples/gatt_client/) (HW-verified
