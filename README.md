@@ -129,7 +129,7 @@ runtime_ble_init(&cfg);
 runtime_ble_load();              // bring radio up + advertise
 runtime_ble_notify(1, buf, n);   // notify characteristic #1 (TX)
 runtime_ble_read_rssi();         // -> on_rssi(rssi)
-runtime_ble_set_phy(RUNTIME_BLE_PHY_2M);
+runtime_ble_set_phy(RUNTIME_BLE_PHY_2M);       // or RUNTIME_BLE_PHY_CODED
 runtime_ble_update_data_length(251, 2120);
 runtime_ble_update_conn_params(30, 60, 0, 4000);
 runtime_ble_read_att_mtu();      // -> on_att_mtu(att_mtu)

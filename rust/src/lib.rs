@@ -501,7 +501,7 @@ fn link_cmd(cmd: u32) -> c_int {
 
 #[no_mangle]
 pub extern "C" fn runtime_ble_set_phy(phy: u8) -> c_int {
-    if phy != 1 && phy != 2 {
+    if phy != 1 && phy != 2 && phy != 3 {
         return RUNTIME_BLE_ERR_INVALID;
     }
     LINK_PHY.store(phy as usize, Ordering::Release);
