@@ -73,6 +73,7 @@ int main(void)
 		.device_name = "RTBLE-L2C-CENT",
 		.role = RUNTIME_BLE_ROLE_CENTRAL,
 		.peer_address = peer,
+		.peer_address_kind = RUNTIME_BLE_ADDR_RANDOM,
 		.l2cap_psm = L2CAP_PSM,
 		.callbacks = {
 			.on_connected = on_connected,

@@ -78,6 +78,17 @@ pub struct RuntimeBleCallbacks {
     pub on_scan_result: Option<
         extern "C" fn(addr: *const u8, rssi: i8, adv: *const u8, adv_len: usize, user: *mut c_void),
     >,
+    /// Central: scan report with address type (RUNTIME_BLE_ADDR_*).
+    pub on_scan_result_ext: Option<
+        extern "C" fn(
+            addr: *const u8,
+            addr_kind: u8,
+            rssi: i8,
+            adv: *const u8,
+            adv_len: usize,
+            user: *mut c_void,
+        ),
+    >,
     /// Central: a characteristic found by runtime_ble_client_discover.
     pub on_discovered: Option<
         extern "C" fn(handle: u16, uuid: *const u8, uuid_len: u8, props: u16, user: *mut c_void),
@@ -185,6 +196,7 @@ pub struct RuntimeBleConfig {
     pub role: u8,
     /// Central only: optional 6-byte peer to auto-connect on load (null -> none).
     pub peer_address: *const u8,
+    pub peer_address_kind: u8,
     pub l2cap_psm: u16,
     pub security_bondable: u8,
     pub security_request_on_connect: u8,
@@ -214,6 +226,7 @@ pub(crate) struct RuntimeCfg {
     pub num_services: u8,
     pub role: u8,
     pub peer_address: *const u8,
+    pub peer_address_kind: u8,
     pub l2cap_psm: u16,
     pub security_bondable: u8,
     pub security_request_on_connect: u8,
@@ -253,6 +266,8 @@ pub(crate) static CENTRAL_CMD: AtomicU32 = AtomicU32::new(CCMD_NONE);
 pub(crate) static CENTRAL_HANDLE: AtomicU32 = AtomicU32::new(0);
 /// 6-byte peer address for CCMD_CONNECT.
 pub(crate) static mut CENTRAL_ADDR: [u8; 6] = [0; 6];
+/// RUNTIME_BLE_ADDR_* address kind for CCMD_CONNECT.
+pub(crate) static CENTRAL_ADDR_KIND: AtomicUsize = AtomicUsize::new(0);
 /// Service UUID (LE) + length for CCMD_DISCOVER.
 pub(crate) static mut CENTRAL_UUID: [u8; 16] = [0; 16];
 pub(crate) static CENTRAL_UUID_LEN: AtomicUsize = AtomicUsize::new(0);
@@ -316,6 +331,7 @@ pub extern "C" fn runtime_ble_init(cfg: *const RuntimeBleConfig) -> c_int {
             num_services: c.num_services,
             role: c.role,
             peer_address: c.peer_address,
+            peer_address_kind: c.peer_address_kind,
             l2cap_psm: c.l2cap_psm,
             security_bondable: c.security_bondable,
             security_request_on_connect: c.security_request_on_connect,
@@ -478,6 +494,11 @@ pub extern "C" fn runtime_ble_scan_stop() -> c_int {
 
 #[no_mangle]
 pub extern "C" fn runtime_ble_connect(addr: *const u8) -> c_int {
+    runtime_ble_connect_addr(addr, 0)
+}
+
+#[no_mangle]
+pub extern "C" fn runtime_ble_connect_addr(addr: *const u8, addr_kind: u8) -> c_int {
     #[cfg(feature = "central")]
     {
         if addr.is_null() {
@@ -490,11 +511,12 @@ pub extern "C" fn runtime_ble_connect(addr: *const u8) -> c_int {
                 6,
             );
         }
+        CENTRAL_ADDR_KIND.store(addr_kind as usize, Ordering::Release);
         central_cmd(CCMD_CONNECT, 0)
     }
     #[cfg(not(feature = "central"))]
     {
-        let _ = addr;
+        let _ = (addr, addr_kind);
         RUNTIME_BLE_ERR_INVALID
     }
 }

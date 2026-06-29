@@ -160,12 +160,15 @@ can also be a **central / GATT client** — build the central-capable lib
 ```c
 runtime_ble_scan_start(1, 100, 50, 0);  // active scan; results -> on_scan_result
 runtime_ble_scan_stop();
-runtime_ble_connect(addr);              // or config.peer_address to auto-connect
+runtime_ble_connect_addr(addr, RUNTIME_BLE_ADDR_RANDOM);
+                                        // or config.peer_address to auto-connect
 runtime_ble_client_discover(svc, 16);   // -> on_discovered(handle, …)
 runtime_ble_client_subscribe(handle);   // -> on_notification(handle, …)
 runtime_ble_client_write(handle, buf, n);
 runtime_ble_client_read(handle);        // -> on_read(handle, …)
 ```
+Use `on_scan_result_ext` when the central needs the peer's address type; pass
+that value to `runtime_ble_connect_addr()` or `config.peer_address_kind`.
 See [`examples/gatt_client/`](examples/gatt_client/) (HW-verified
 against the peripheral echo example). The role is feature-gated so peripheral-
 only apps stay on the lean default lib (see [`rust/README.md`](rust/README.md)).

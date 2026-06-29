@@ -102,6 +102,7 @@ int main(void)
 		.manufacturer_id = 0xFFFF,
 		.role = RUNTIME_BLE_ROLE_DUAL,
 		.peer_address = peer,
+		.peer_address_kind = RUNTIME_BLE_ADDR_RANDOM,
 		.services = my_services,
 		.num_services = 1,
 		.callbacks = {

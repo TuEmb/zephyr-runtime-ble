@@ -1,7 +1,7 @@
 /*
  * runtime-ble central / GATT-client example.
  *
- * Scans briefly, connects to a peer (config.role = CENTRAL + runtime_ble_connect),
+ * Scans briefly, connects to a peer (config.role = CENTRAL + runtime_ble_connect_addr),
  * discovers a vendor service, subscribes to its notify characteristic, writes to
  * its write characteristic, and prints the notification the peer sends back.
  *
@@ -52,13 +52,14 @@ static void on_disconnected(uint8_t r, void *u)
 	connected = 0;
 	printk("[app] disconnected (reason 0x%02x)\n", r);
 }
-static void on_scan_result(const uint8_t *addr, int8_t rssi, const uint8_t *adv, size_t adv_len,
-			   void *u)
+static void on_scan_result_ext(const uint8_t *addr, uint8_t kind, int8_t rssi, const uint8_t *adv,
+			       size_t adv_len, void *u)
 {
 	ARG_UNUSED(u);
 	ARG_UNUSED(adv);
 	if (scan_printed < 8) {
-		printk("[scan] %02x:%02x:%02x:%02x:%02x:%02x rssi=%d adv_len=%u\n",
+		printk("[scan] %s %02x:%02x:%02x:%02x:%02x:%02x rssi=%d adv_len=%u\n",
+		       kind == RUNTIME_BLE_ADDR_PUBLIC ? "public" : "random",
 		       addr[5], addr[4], addr[3], addr[2], addr[1], addr[0],
 		       rssi, (unsigned int)adv_len);
 		scan_printed++;
@@ -102,7 +103,7 @@ int main(void)
 		.callbacks = {
 			.on_connected = on_connected,
 			.on_disconnected = on_disconnected,
-			.on_scan_result = on_scan_result,
+			.on_scan_result_ext = on_scan_result_ext,
 			.on_discovered = on_discovered,
 			.on_notification = on_notification,
 			.on_read = on_read,
@@ -126,7 +127,7 @@ int main(void)
 
 	printk("[app] connecting to %02x:%02x:%02x:%02x:%02x:%02x\n",
 	       peer[5], peer[4], peer[3], peer[2], peer[1], peer[0]);
-	runtime_ble_connect(peer);
+	runtime_ble_connect_addr(peer, RUNTIME_BLE_ADDR_RANDOM);
 	while (!connected) {
 		k_sleep(K_MSEC(100));
 	}

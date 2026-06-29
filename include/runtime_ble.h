@@ -48,6 +48,10 @@ extern "C" {
 #define RUNTIME_BLE_ROLE_CENTRAL    1   /* scan/connect + GATT client         */
 #define RUNTIME_BLE_ROLE_DUAL       2   /* both at once: server + client      */
 
+/* BLE peer address kind. */
+#define RUNTIME_BLE_ADDR_RANDOM     0
+#define RUNTIME_BLE_ADDR_PUBLIC     1
+
 /* PHY selector for runtime_ble_set_phy(). */
 #define RUNTIME_BLE_PHY_1M 1
 #define RUNTIME_BLE_PHY_2M 2
@@ -127,6 +131,9 @@ typedef struct {
 	/* Advertising report from runtime_ble_scan_start(). addr is 6 bytes, LSB first. */
 	void (*on_scan_result)(const uint8_t *addr, int8_t rssi,
 			       const uint8_t *adv, size_t adv_len, void *user);
+	/* Advertising report with address type (RUNTIME_BLE_ADDR_*). */
+	void (*on_scan_result_ext)(const uint8_t *addr, uint8_t addr_kind, int8_t rssi,
+				   const uint8_t *adv, size_t adv_len, void *user);
 	/* A characteristic found by runtime_ble_client_discover() (uuid is LE). */
 	void (*on_discovered)(uint16_t handle, const uint8_t *uuid, uint8_t uuid_len,
 			      uint16_t props, void *user);
@@ -216,8 +223,10 @@ typedef struct {
 	/* ---- Role ---- */
 	uint8_t                 role;                 /* RUNTIME_BLE_ROLE_* (0 peripheral, default) */
 	/* Central only: optional 6-byte peer (LSB first) to auto-connect on load;
-	 * NULL -> none (use runtime_ble_scan_start + runtime_ble_connect). */
+	 * NULL -> none (use runtime_ble_scan_start + runtime_ble_connect). Address
+	 * kind is RUNTIME_BLE_ADDR_*; zero/default keeps the historic random type. */
 	const uint8_t          *peer_address;
+	uint8_t                 peer_address_kind;
 	/* L2CAP connection-oriented channel PSM (0 = disabled). Once connected, a
 	 * peripheral listens on it and a central opens it. Needs a l2cap-capable
 	 * lib (CONFIG_RUNTIME_BLE_L2CAP=y). */
@@ -286,8 +295,8 @@ void runtime_ble_addr(uint8_t out[6]);
  * these return RUNTIME_BLE_ERR_INVALID). Calls are queued to the runtime thread;
  * results arrive via the callbacks above. One central link at a time.
  *
- * Discovery can be by active/passive scan (on_scan_result), then connect by
- * address (runtime_ble_connect or config.peer_address). */
+ * Discovery can be by active/passive scan (on_scan_result/on_scan_result_ext),
+ * then connect by address (runtime_ble_connect_addr or config.peer_address). */
 
 /* Start scanning. active=1 sends scan requests; active=0 is passive. interval/window
  * are milliseconds (0 -> 100/50 ms). timeout_ms=0 scans until stop/connect/unload. */
@@ -297,8 +306,11 @@ int runtime_ble_scan_start(uint8_t active, uint16_t interval_ms, uint16_t window
 /* Stop an active scan. Idempotent. */
 int runtime_ble_scan_stop(void);
 
-/* Connect to a peer by address (6 bytes, LSB first). on_connected fires on success. */
+/* Connect to a random-address peer (6 bytes, LSB first). on_connected fires on success. */
 int runtime_ble_connect(const uint8_t addr[6]);
+
+/* Connect to a peer by address and type (RUNTIME_BLE_ADDR_*). */
+int runtime_ble_connect_addr(const uint8_t addr[6], uint8_t addr_kind);
 
 /* Disconnect the current central link. */
 int runtime_ble_disconnect(void);

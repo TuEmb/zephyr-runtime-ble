@@ -18,9 +18,9 @@ use core::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 
 use bt_hci::param::{AddrKind, BdAddr};
 use embassy_futures::join::join;
-use embassy_futures::select::{select, select3};
 #[cfg(feature = "central")]
 use embassy_futures::select::Either;
+use embassy_futures::select::{select, select3};
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_time::{Duration, Timer};
 use embassy_time_driver::Driver;
@@ -37,9 +37,9 @@ use trouble_host::gatt::GattClient;
 #[cfg(feature = "l2cap")]
 use trouble_host::l2cap::{L2capChannel, L2capChannelConfig};
 use trouble_host::prelude::*;
-use trouble_host::{BondInformation, Identity, IdentityResolvingKey, LongTermKey, OobData};
 #[cfg(feature = "central")]
 use trouble_host::scan::Scanner;
+use trouble_host::{BondInformation, Identity, IdentityResolvingKey, LongTermKey, OobData};
 
 use crate::{
     RuntimeBleCharDef, RuntimeCfg, NUS_TX_CHR, SEND_BUF, SEND_BUF_CAP, SEND_CHR, SEND_LEN,
@@ -48,8 +48,9 @@ use crate::{
 #[cfg(feature = "central")]
 use crate::{
     CCMD_CONNECT, CCMD_DISCONNECT, CCMD_DISCOVER, CCMD_NONE, CCMD_READ, CCMD_SCAN_START,
-    CCMD_SCAN_STOP, CCMD_SUBSCRIBE, CCMD_WRITE, CENTRAL_ADDR, CENTRAL_CMD, CENTRAL_HANDLE,
-    CENTRAL_UUID, CENTRAL_UUID_LEN, SCAN_ACTIVE, SCAN_INTERVAL_MS, SCAN_TIMEOUT_MS, SCAN_WINDOW_MS,
+    CCMD_SCAN_STOP, CCMD_SUBSCRIBE, CCMD_WRITE, CENTRAL_ADDR, CENTRAL_ADDR_KIND, CENTRAL_CMD,
+    CENTRAL_HANDLE, CENTRAL_UUID, CENTRAL_UUID_LEN, SCAN_ACTIVE, SCAN_INTERVAL_MS, SCAN_TIMEOUT_MS,
+    SCAN_WINDOW_MS,
 };
 #[cfg(feature = "l2cap")]
 use crate::{L2CAP_SEND_BUF, L2CAP_SEND_LEN, L2CAP_SEND_REQ};
@@ -408,6 +409,29 @@ pub(crate) fn device_address(cfg: &RuntimeCfg) -> Address {
     Address::random(addr)
 }
 
+const RTBLE_ADDR_RANDOM: u8 = 0;
+const RTBLE_ADDR_PUBLIC: u8 = 1;
+
+fn c_addr_kind(kind: u8) -> AddrKind {
+    if kind == RTBLE_ADDR_PUBLIC {
+        AddrKind::PUBLIC
+    } else {
+        AddrKind::RANDOM
+    }
+}
+
+fn addr_kind_to_c(kind: AddrKind) -> u8 {
+    if kind == AddrKind::PUBLIC {
+        RTBLE_ADDR_PUBLIC
+    } else {
+        RTBLE_ADDR_RANDOM
+    }
+}
+
+fn peer_address(addr: [u8; 6], kind: u8) -> Address {
+    Address::new(c_addr_kind(kind), BdAddr::new(addr))
+}
+
 // ---------------------------------------------------------------------------
 // Session: build the GATT, run the host + advertise/connection loop until unload.
 // ---------------------------------------------------------------------------
@@ -437,7 +461,12 @@ pub(crate) fn serve_session(
         // loop) AND a client at the same time, on two simultaneous links.
         #[cfg(feature = "central")]
         if cfg.role == 2 {
-            select3(work, central_loop(stack, cfg, &gatt.bond_slots), wait_unload()).await;
+            select3(
+                work,
+                central_loop(stack, cfg, &gatt.bond_slots),
+                wait_unload(),
+            )
+            .await;
         } else {
             select(work, wait_unload()).await;
         }
@@ -478,6 +507,16 @@ impl trouble_host::prelude::EventHandler for RtEventHandler<'_> {
     fn on_adv_reports(&self, reports: trouble_host::prelude::LeAdvReportsIter) {
         for report in reports {
             let Ok(report) = report else { continue };
+            if let Some(cb) = self.cfg.callbacks.on_scan_result_ext {
+                cb(
+                    report.addr.raw().as_ptr(),
+                    addr_kind_to_c(report.addr_kind),
+                    report.rssi,
+                    report.data.as_ptr(),
+                    report.data.len(),
+                    self.cfg.user,
+                );
+            }
             if let Some(cb) = self.cfg.callbacks.on_scan_result {
                 cb(
                     report.addr.raw().as_ptr(),
@@ -493,6 +532,16 @@ impl trouble_host::prelude::EventHandler for RtEventHandler<'_> {
     fn on_ext_adv_reports(&self, reports: trouble_host::prelude::LeExtAdvReportsIter) {
         for report in reports {
             let Ok(report) = report else { continue };
+            if let Some(cb) = self.cfg.callbacks.on_scan_result_ext {
+                cb(
+                    report.addr.raw().as_ptr(),
+                    addr_kind_to_c(report.addr_kind),
+                    report.rssi,
+                    report.data.as_ptr(),
+                    report.data.len(),
+                    self.cfg.user,
+                );
+            }
             if let Some(cb) = self.cfg.callbacks.on_scan_result {
                 cb(
                     report.addr.raw().as_ptr(),
@@ -786,8 +835,9 @@ async fn link_control_once(
                 } else {
                     max_ms as u64
                 }),
-                max_latency: LINK_CONN_LATENCY.load(Ordering::Acquire).min(u16::MAX as usize)
-                    as u16,
+                max_latency: LINK_CONN_LATENCY
+                    .load(Ordering::Acquire)
+                    .min(u16::MAX as usize) as u16,
                 min_event_length: Duration::from_secs(0),
                 max_event_length: Duration::from_secs(0),
                 supervision_timeout: Duration::from_millis(if timeout_ms == 0 {
@@ -900,7 +950,7 @@ type ClientP<'a> = GattClient<'a, nrf_sdc::SoftdeviceController<'static>, Defaul
 
 #[cfg(feature = "central")]
 enum IdleCmd {
-    Connect([u8; 6]),
+    Connect([u8; 6], u8),
     ScanStart,
 }
 
@@ -920,7 +970,10 @@ pub(crate) fn serve_central(
     let runner = stack.runner();
     block_on(select(
         mpsl.run(),
-        select(run_runner(runner, cfg), central_loop(stack, cfg, &bond_slots)),
+        select(
+            run_runner(runner, cfg),
+            central_loop(stack, cfg, &bond_slots),
+        ),
     ));
 }
 
@@ -941,16 +994,16 @@ async fn central_loop(
             auto = false;
             let mut a = [0u8; 6];
             unsafe { core::ptr::copy_nonoverlapping(cfg.peer_address, a.as_mut_ptr(), 6) };
-            a
+            peer_address(a, cfg.peer_address_kind)
         } else {
             match wait_idle_cmd().await {
-                Some(IdleCmd::Connect(a)) => a,
+                Some(IdleCmd::Connect(a, kind)) => peer_address(a, kind),
                 Some(IdleCmd::ScanStart) => {
                     let mut scanner = Scanner::new(central);
                     let connect_after_scan = run_scan(&mut scanner, cfg).await;
                     central = scanner.into_inner();
                     match connect_after_scan {
-                        Some(a) => a,
+                        Some((a, kind)) => peer_address(a, kind),
                         None => continue,
                     }
                 }
@@ -958,7 +1011,7 @@ async fn central_loop(
             }
         };
 
-        let filt = [Address::random(addr)];
+        let filt = [addr];
         let cc = ConnectConfig {
             scan_config: ScanConfig {
                 filter_accept_list: &filt,
@@ -1002,7 +1055,8 @@ async fn wait_idle_cmd() -> Option<IdleCmd> {
                         6,
                     );
                 }
-                return Some(IdleCmd::Connect(a));
+                let kind = CENTRAL_ADDR_KIND.load(Ordering::Acquire) as u8;
+                return Some(IdleCmd::Connect(a, kind));
             }
             CCMD_SCAN_START => return Some(IdleCmd::ScanStart),
             CCMD_NONE | CCMD_SCAN_STOP => {}
@@ -1018,7 +1072,7 @@ async fn wait_idle_cmd() -> Option<IdleCmd> {
 async fn run_scan(
     scanner: &mut Scanner<'_, nrf_sdc::SoftdeviceController<'static>, DefaultPacketPool>,
     cfg: &RuntimeCfg,
-) -> Option<[u8; 6]> {
+) -> Option<([u8; 6], u8)> {
     let interval_ms = SCAN_INTERVAL_MS.load(Ordering::Acquire);
     let window_ms = SCAN_WINDOW_MS.load(Ordering::Acquire);
     let timeout_ms = SCAN_TIMEOUT_MS.load(Ordering::Acquire);
@@ -1069,7 +1123,8 @@ async fn run_scan(
                         6,
                     );
                 }
-                return Some(a);
+                let kind = CENTRAL_ADDR_KIND.load(Ordering::Acquire) as u8;
+                return Some((a, kind));
             }
             CCMD_SCAN_START | CCMD_NONE => {}
             _ => {}
