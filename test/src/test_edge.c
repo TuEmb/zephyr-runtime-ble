@@ -86,6 +86,12 @@ ZTEST(runtime_ble_edge, test_central_discover_all_requires_central_lib)
 		      "default peripheral lib must reject central discover all");
 }
 
+ZTEST(runtime_ble_edge, test_central_discover_services_requires_central_lib)
+{
+	zassert_equal(runtime_ble_client_discover_services(), RUNTIME_BLE_ERR_INVALID,
+		      "default peripheral lib must reject central service discovery");
+}
+
 ZTEST(runtime_ble_edge, test_oob_security_config_init)
 {
 	runtime_ble_config_t cfg = *test_base_cfg();

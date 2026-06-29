@@ -105,6 +105,16 @@ pub struct RuntimeBleCallbacks {
             user: *mut c_void,
         ),
     >,
+    /// Central: a primary service found by service discovery.
+    pub on_service: Option<
+        extern "C" fn(
+            start_handle: u16,
+            end_handle: u16,
+            uuid: *const u8,
+            uuid_len: u8,
+            user: *mut c_void,
+        ),
+    >,
     /// Central: a characteristic found by runtime_ble_client_discover.
     pub on_discovered: Option<
         extern "C" fn(handle: u16, uuid: *const u8, uuid_len: u8, props: u16, user: *mut c_void),
@@ -344,6 +354,7 @@ pub(crate) const CCMD_DISCOVER_DESCRIPTORS: u32 = 10;
 pub(crate) const CCMD_SUBSCRIBE_INDICATE: u32 = 11;
 pub(crate) const CCMD_READ_BLOB: u32 = 12;
 pub(crate) const CCMD_DISCOVER_ALL: u32 = 13;
+pub(crate) const CCMD_DISCOVER_SERVICES: u32 = 14;
 pub(crate) static CENTRAL_CMD: AtomicU32 = AtomicU32::new(CCMD_NONE);
 /// Attribute handle (read/write/subscribe) for the pending command.
 pub(crate) static CENTRAL_HANDLE: AtomicU32 = AtomicU32::new(0);
@@ -740,6 +751,12 @@ pub extern "C" fn runtime_ble_connect_addr(addr: *const u8, addr_kind: u8) -> c_
 pub extern "C" fn runtime_ble_disconnect() -> c_int {
     central_cmd(CCMD_DISCONNECT, 0)
 }
+
+#[no_mangle]
+pub extern "C" fn runtime_ble_client_discover_services() -> c_int {
+    central_cmd(CCMD_DISCOVER_SERVICES, 0)
+}
+
 #[no_mangle]
 pub extern "C" fn runtime_ble_client_discover(uuid: *const u8, uuid_len: u8) -> c_int {
     #[cfg(feature = "central")]

@@ -102,6 +102,14 @@ static void on_discovered(uint16_t h, const uint8_t *uuid, uint8_t ul, uint16_t 
 	discovered++;
 	printk("[app] discovered characteristic #%d handle=%u\n", discovered, h);
 }
+
+static void on_service(uint16_t start, uint16_t end, const uint8_t *uuid, uint8_t ul, void *u)
+{
+	ARG_UNUSED(u);
+	printk("[app] service handles=%u-%u uuid_len=%u uuid0=0x%02x\n",
+	       start, end, ul, ul > 0 ? uuid[0] : 0);
+}
+
 static void on_descriptor(uint16_t h, const uint8_t *uuid, uint8_t ul, void *u)
 {
 	ARG_UNUSED(u);
@@ -154,6 +162,7 @@ int main(void)
 			.on_disconnected = on_disconnected,
 			.on_scan_result_ext = on_scan_result_ext,
 			.on_scan_result_meta = on_scan_result_meta,
+			.on_service = on_service,
 			.on_discovered = on_discovered,
 			.on_descriptor = on_descriptor,
 			.on_notification = on_notification,
@@ -190,6 +199,10 @@ int main(void)
 		k_sleep(K_MSEC(100));
 	}
 	k_sleep(K_MSEC(500));
+	printk("[app] discovering primary services...\n");
+	runtime_ble_client_discover_services();
+	k_sleep(K_MSEC(700));
+
 	printk("[app] discovering vendor service...\n");
 	runtime_ble_client_discover(svc_uuid, 16);
 	k_sleep(K_MSEC(1000));

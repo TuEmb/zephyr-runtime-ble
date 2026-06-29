@@ -16,11 +16,9 @@ use core::pin::pin;
 use core::sync::atomic::Ordering;
 use core::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 
-use bt_hci::param::{
-    AddrKind, BdAddr, LeAdvEventKind, LeExtAdvDataStatus, PhyMask, SpacingTypes,
-};
 #[cfg(feature = "central")]
 use bt_hci::param::FilterDuplicates;
+use bt_hci::param::{AddrKind, BdAddr, LeAdvEventKind, LeExtAdvDataStatus, PhyMask, SpacingTypes};
 use bt_hci::uuid::BluetoothUuid16;
 use embassy_futures::join::join;
 #[cfg(feature = "central")]
@@ -31,12 +29,13 @@ use embassy_time::{Duration, Timer};
 use embassy_time_driver::Driver;
 use embassy_time_queue_utils::Queue;
 use nrf_sdc::mpsl::MultiprotocolServiceLayer;
+use trouble_host::advertise::{AdvChannelMap, TxPower};
 use trouble_host::attribute::{
     AttributeTable, Characteristic, CharacteristicProps, PermissionLevel, Service,
 };
-use trouble_host::connection::{ConnectRateParams, RequestedConnParams};
 #[cfg(feature = "central")]
 use trouble_host::connection::{ConnectConfig, PhySet, ScanConfig};
+use trouble_host::connection::{ConnectRateParams, RequestedConnParams};
 #[cfg(feature = "central")]
 use trouble_host::gatt::GattClient;
 #[cfg(feature = "l2cap")]
@@ -44,32 +43,31 @@ use trouble_host::l2cap::{L2capChannel, L2capChannelConfig};
 use trouble_host::prelude::*;
 #[cfg(feature = "central")]
 use trouble_host::scan::Scanner;
-use trouble_host::advertise::{AdvChannelMap, TxPower};
 use trouble_host::{BondInformation, Identity, IdentityResolvingKey, LongTermKey, OobData};
 
 use crate::{
-    RuntimeBleCharDef, RuntimeCfg, NUS_TX_CHR, SEND_BUF, SEND_BUF_CAP, SEND_CHR, SEND_LEN,
-    SEND_KIND, SEND_KIND_INDICATE, SEND_REQ, UNLOAD_REQ,
+    RuntimeBleCharDef, RuntimeCfg, NUS_TX_CHR, SEND_BUF, SEND_BUF_CAP, SEND_CHR, SEND_KIND,
+    SEND_KIND_INDICATE, SEND_LEN, SEND_REQ, UNLOAD_REQ,
 };
 #[cfg(feature = "central")]
 use crate::{
     CCMD_CONNECT, CCMD_DISCONNECT, CCMD_DISCOVER, CCMD_DISCOVER_ALL, CCMD_DISCOVER_DESCRIPTORS,
-    CCMD_NONE, CCMD_READ, CCMD_READ_BLOB, CCMD_SCAN_START, CCMD_SCAN_STOP, CCMD_SUBSCRIBE,
-    CCMD_SUBSCRIBE_INDICATE, CCMD_WRITE, CCMD_WRITE_NO_RSP, CENTRAL_ADDR, CENTRAL_ADDR_KIND,
-    CENTRAL_CMD, CENTRAL_HANDLE, CENTRAL_UUID, CENTRAL_UUID_LEN, SCAN_ACTIVE, SCAN_FILTER_ADDR,
-    SCAN_FILTER_ADDR_ENABLED, SCAN_FILTER_ADDR_KIND, SCAN_FILTER_DUPLICATES, SCAN_INTERVAL_MS,
-    SCAN_PHY_OPTIONS, SCAN_TIMEOUT_MS, SCAN_WINDOW_MS,
+    CCMD_DISCOVER_SERVICES, CCMD_NONE, CCMD_READ, CCMD_READ_BLOB, CCMD_SCAN_START, CCMD_SCAN_STOP,
+    CCMD_SUBSCRIBE, CCMD_SUBSCRIBE_INDICATE, CCMD_WRITE, CCMD_WRITE_NO_RSP, CENTRAL_ADDR,
+    CENTRAL_ADDR_KIND, CENTRAL_CMD, CENTRAL_HANDLE, CENTRAL_UUID, CENTRAL_UUID_LEN, SCAN_ACTIVE,
+    SCAN_FILTER_ADDR, SCAN_FILTER_ADDR_ENABLED, SCAN_FILTER_ADDR_KIND, SCAN_FILTER_DUPLICATES,
+    SCAN_INTERVAL_MS, SCAN_PHY_OPTIONS, SCAN_TIMEOUT_MS, SCAN_WINDOW_MS,
 };
 #[cfg(feature = "l2cap")]
 use crate::{L2CAP_SEND_BUF, L2CAP_SEND_LEN, L2CAP_SEND_REQ};
 use crate::{
-    LCMD_CONN_PARAMS, LCMD_CONNECTION_RATE, LCMD_DLE, LCMD_FRAME_SPACE, LCMD_NONE,
+    LCMD_CONNECTION_RATE, LCMD_CONN_PARAMS, LCMD_DLE, LCMD_FRAME_SPACE, LCMD_NONE,
     LCMD_PASSKEY_CANCEL, LCMD_PASSKEY_CONFIRM, LCMD_PASSKEY_INPUT, LCMD_READ_ATT_MTU,
-    LCMD_READ_PHY, LCMD_READ_RSSI, LCMD_SECURITY_REQUEST, LCMD_SET_PHY, LINK_CMD, LINK_CONN_LATENCY,
-    LINK_CONN_MAX_MS, LINK_CONN_MIN_MS, LINK_CONN_TIMEOUT_MS, LINK_DLE_OCTETS,
-    LINK_DLE_TIME_US, LINK_FRAME_SPACE_MAX_US, LINK_FRAME_SPACE_MIN_US,
-    LINK_FRAME_SPACE_PHY_MASK, LINK_FRAME_SPACE_TYPES, LINK_PASSKEY, LINK_PHY,
-    LINK_RATE_CONTINUATION, LINK_RATE_SUBRATE_MAX, LINK_RATE_SUBRATE_MIN,
+    LCMD_READ_PHY, LCMD_READ_RSSI, LCMD_SECURITY_REQUEST, LCMD_SET_PHY, LINK_CMD,
+    LINK_CONN_LATENCY, LINK_CONN_MAX_MS, LINK_CONN_MIN_MS, LINK_CONN_TIMEOUT_MS, LINK_DLE_OCTETS,
+    LINK_DLE_TIME_US, LINK_FRAME_SPACE_MAX_US, LINK_FRAME_SPACE_MIN_US, LINK_FRAME_SPACE_PHY_MASK,
+    LINK_FRAME_SPACE_TYPES, LINK_PASSKEY, LINK_PHY, LINK_RATE_CONTINUATION, LINK_RATE_SUBRATE_MAX,
+    LINK_RATE_SUBRATE_MIN,
 };
 
 // Per-chip bring-up. Exactly one chip feature is enabled; `chip::run` is the
@@ -1445,6 +1443,7 @@ async fn client_session(
         loop {
             match CENTRAL_CMD.swap(CCMD_NONE, Ordering::AcqRel) {
                 CCMD_DISCONNECT => conn.disconnect(),
+                CCMD_DISCOVER_SERVICES => client_discover_services(&client, cfg).await,
                 CCMD_DISCOVER => client_discover(&client, &store, cfg).await,
                 CCMD_DISCOVER_ALL => client_discover_all(&client, &store, cfg).await,
                 CCMD_DISCOVER_DESCRIPTORS => client_discover_descriptors(&client, cfg).await,
@@ -1530,6 +1529,22 @@ async fn client_session(
 }
 
 #[cfg(feature = "central")]
+fn report_service(service: &trouble_host::gatt::ServiceHandle, cfg: &RuntimeCfg) {
+    if let Some(cb) = cfg.callbacks.on_service {
+        let range = service.handle_range();
+        let raw_uuid = service.uuid();
+        let raw = raw_uuid.as_raw();
+        cb(
+            *range.start(),
+            *range.end(),
+            raw.as_ptr(),
+            raw.len() as u8,
+            cfg.user,
+        );
+    }
+}
+
+#[cfg(feature = "central")]
 async fn report_service_chars(
     client: &ClientP<'_>,
     service: &trouble_host::gatt::ServiceHandle,
@@ -1554,14 +1569,11 @@ async fn report_service_chars(
 }
 
 #[cfg(feature = "central")]
-async fn client_discover_all(
-    client: &ClientP<'_>,
-    store: &ClientCharStore,
-    cfg: &RuntimeCfg,
-) {
+async fn client_discover_all(client: &ClientP<'_>, store: &ClientCharStore, cfg: &RuntimeCfg) {
     match client.services().await {
         Ok(svcs) => {
             for s in svcs.iter() {
+                report_service(s, cfg);
                 report_service_chars(client, s, store, cfg).await;
             }
         }
@@ -1569,14 +1581,22 @@ async fn client_discover_all(
     }
 }
 
+#[cfg(feature = "central")]
+async fn client_discover_services(client: &ClientP<'_>, cfg: &RuntimeCfg) {
+    match client.services().await {
+        Ok(svcs) => {
+            for s in svcs.iter() {
+                report_service(s, cfg);
+            }
+        }
+        Err(_) => log_str(cfg, "[central] discover services failed\0"),
+    }
+}
+
 /// Discover the characteristics of the service whose UUID is in CENTRAL_UUID;
 /// report each via on_discovered and remember them (for subscribe's CCCD).
 #[cfg(feature = "central")]
-async fn client_discover(
-    client: &ClientP<'_>,
-    store: &ClientCharStore,
-    cfg: &RuntimeCfg,
-) {
+async fn client_discover(client: &ClientP<'_>, store: &ClientCharStore, cfg: &RuntimeCfg) {
     let len = CENTRAL_UUID_LEN.load(Ordering::Acquire);
     let uuid = unsafe { uuid_from(core::ptr::addr_of!(CENTRAL_UUID) as *const u8, len as u8) };
     let svcs = match client.services_by_uuid(&uuid).await {
@@ -1713,7 +1733,10 @@ async fn central_connection_events(
                 }
                 ConnectionEvent::FrameSpaceUpdated { frame_space, .. } => {
                     if let Some(cb) = cfg.callbacks.on_frame_space {
-                        cb(frame_space.as_micros().min(u32::MAX as u64) as u32, cfg.user);
+                        cb(
+                            frame_space.as_micros().min(u32::MAX as u64) as u32,
+                            cfg.user,
+                        );
                     }
                 }
                 ConnectionEvent::ConnectionRateChanged {
@@ -2156,8 +2179,7 @@ fn build_adv_payload(
             return None;
         }
     }
-    if cfg.adv_tx_power_present != 0
-        && !push_ad(dst, &mut pos, 0x0a, &[cfg.adv_tx_power_dbm as u8])
+    if cfg.adv_tx_power_present != 0 && !push_ad(dst, &mut pos, 0x0a, &[cfg.adv_tx_power_dbm as u8])
     {
         return None;
     }
@@ -2242,7 +2264,10 @@ async fn connection_task(
                 }
                 GattConnectionEvent::FrameSpaceUpdated { frame_space, .. } => {
                     if let Some(cb) = cfg.callbacks.on_frame_space {
-                        cb(frame_space.as_micros().min(u32::MAX as u64) as u32, cfg.user);
+                        cb(
+                            frame_space.as_micros().min(u32::MAX as u64) as u32,
+                            cfg.user,
+                        );
                     }
                 }
                 GattConnectionEvent::ConnectionRateChanged {

@@ -176,6 +176,10 @@ typedef struct {
 				    const uint8_t *adv, size_t adv_len, uint16_t flags,
 				    uint8_t primary_phy, uint8_t secondary_phy,
 				    int8_t tx_power_dbm, uint8_t sid, void *user);
+	/* A primary service found by runtime_ble_client_discover_services() or
+	 * runtime_ble_client_discover_all() (uuid is LE). */
+	void (*on_service)(uint16_t start_handle, uint16_t end_handle,
+			   const uint8_t *uuid, uint8_t uuid_len, void *user);
 	/* A characteristic found by runtime_ble_client_discover() (uuid is LE). */
 	void (*on_discovered)(uint16_t handle, const uint8_t *uuid, uint8_t uuid_len,
 			      uint16_t props, void *user);
@@ -421,12 +425,15 @@ int runtime_ble_connect_addr(const uint8_t addr[6], uint8_t addr_kind);
 /* Disconnect the current central link. */
 int runtime_ble_disconnect(void);
 
+/* Discover primary services. Each service found is reported via on_service. */
+int runtime_ble_client_discover_services(void);
+
 /* Discover the characteristics of a service (16- or 128-bit UUID, LE bytes).
  * Each characteristic found is reported via on_discovered. */
 int runtime_ble_client_discover(const uint8_t *svc_uuid, uint8_t uuid_len);
 
-/* Discover characteristics across all primary services; each characteristic found is reported
- * via on_discovered. */
+/* Discover services and characteristics across all primary services. Services are
+ * reported via on_service; characteristics are reported via on_discovered. */
 int runtime_ble_client_discover_all(void);
 
 /* Discover descriptors by handle range. Each descriptor is reported via on_descriptor. */
