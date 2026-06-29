@@ -26,9 +26,9 @@ const L2CAP_RXQ: u8 = 4;
 // SoftDevice Controller memory pool. The central role needs more (scan + central
 // link state), so size it up when that feature is compiled in.
 #[cfg(not(feature = "central"))]
-const SDC_MEM: usize = 11264;
+const SDC_MEM: usize = 14336;
 #[cfg(feature = "central")]
-const SDC_MEM: usize = 16384;
+const SDC_MEM: usize = 20480;
 
 // ---------------------------------------------------------------------------
 // Interrupts: `Irqs` is a type-level promise; the real ISRs are the C-callable
@@ -73,14 +73,22 @@ fn build_sdc<'d, const N: usize>(
         .support_adv()
         .support_peripheral()
         .support_le_2m_phy()
+        .support_le_coded_phy()
         .support_phy_update_peripheral()
-        .support_dle_peripheral();
+        .support_dle_peripheral()
+        .support_frame_space_update_peripheral()
+        .support_extended_feature_set()
+        .support_connection_subrating_peripheral();
     #[cfg(feature = "central")]
     let b = b
         .support_scan()
+        .support_ext_scan()
         .support_central()
+        .support_ext_central()
         .support_phy_update_central()
-        .support_dle_central();
+        .support_dle_central()
+        .support_frame_space_update_central()
+        .support_connection_subrating_central();
     let b = b.peripheral_count(1)?;
     #[cfg(feature = "central")]
     let b = b.central_count(1)?;

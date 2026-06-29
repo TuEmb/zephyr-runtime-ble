@@ -29,9 +29,9 @@ const L2CAP_RXQ: u8 = 4;
 
 // SoftDevice Controller memory pool; the central role needs more.
 #[cfg(not(feature = "central"))]
-const SDC_MEM: usize = 8192;
-#[cfg(feature = "central")]
 const SDC_MEM: usize = 12288;
+#[cfg(feature = "central")]
+const SDC_MEM: usize = 16384;
 
 #[derive(Clone, Copy)]
 pub(super) struct Irqs;
@@ -72,14 +72,22 @@ fn build_sdc<'d, const N: usize>(
         .support_adv()
         .support_peripheral()
         .support_le_2m_phy()
+        .support_le_coded_phy()
         .support_phy_update_peripheral()
-        .support_dle_peripheral();
+        .support_dle_peripheral()
+        .support_frame_space_update_peripheral()
+        .support_extended_feature_set()
+        .support_connection_subrating_peripheral();
     #[cfg(feature = "central")]
     let b = b
         .support_scan()
+        .support_ext_scan()
         .support_central()
+        .support_ext_central()
         .support_phy_update_central()
-        .support_dle_central();
+        .support_dle_central()
+        .support_frame_space_update_central()
+        .support_connection_subrating_central();
     let b = b.peripheral_count(1)?;
     #[cfg(feature = "central")]
     let b = b.central_count(1)?;
