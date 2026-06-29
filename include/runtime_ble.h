@@ -66,6 +66,9 @@ extern "C" {
 #define RUNTIME_BLE_SCAN_F_DATA_INCOMPLETE (1u << 5)
 #define RUNTIME_BLE_SCAN_F_DATA_TRUNCATED  (1u << 6)
 
+/* Scan option bits for runtime_ble_scan_start_ex(). */
+#define RUNTIME_BLE_SCAN_OPT_FILTER_DUPLICATES (1u << 0)
+
 /* Security event codes for on_security_event(). */
 #define RUNTIME_BLE_SECURITY_PASSKEY_DISPLAY  1
 #define RUNTIME_BLE_SECURITY_PASSKEY_CONFIRM  2
@@ -340,6 +343,12 @@ void runtime_ble_addr(uint8_t out[6]);
  * are milliseconds (0 -> 100/50 ms). timeout_ms=0 scans until stop/connect/unload. */
 int runtime_ble_scan_start(uint8_t active, uint16_t interval_ms, uint16_t window_ms,
 			   uint16_t timeout_ms);
+
+/* Start scanning with controller-side options. options uses RUNTIME_BLE_SCAN_OPT_*.
+ * If filter_addr is non-NULL, scan reports are limited to that peer address. */
+int runtime_ble_scan_start_ex(uint8_t active, uint16_t interval_ms, uint16_t window_ms,
+			      uint16_t timeout_ms, uint8_t options,
+			      const uint8_t filter_addr[6], uint8_t filter_addr_kind);
 
 /* Stop an active scan. Idempotent. */
 int runtime_ble_scan_stop(void);

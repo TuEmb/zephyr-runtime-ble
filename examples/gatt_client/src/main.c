@@ -145,8 +145,9 @@ int main(void)
 		return 0;
 	}
 
-	printk("[app] active scan for 2 seconds...\n");
-	runtime_ble_scan_start(1, 100, 50, 2000);
+	printk("[app] active scan for 2 seconds with duplicate filtering...\n");
+	runtime_ble_scan_start_ex(1, 100, 50, 2000, RUNTIME_BLE_SCAN_OPT_FILTER_DUPLICATES,
+				  NULL, 0);
 	k_sleep(K_MSEC(2300));
 	runtime_ble_scan_stop();
 

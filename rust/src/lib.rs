@@ -325,6 +325,10 @@ pub(crate) static SCAN_ACTIVE: AtomicBool = AtomicBool::new(false);
 pub(crate) static SCAN_INTERVAL_MS: AtomicUsize = AtomicUsize::new(0);
 pub(crate) static SCAN_WINDOW_MS: AtomicUsize = AtomicUsize::new(0);
 pub(crate) static SCAN_TIMEOUT_MS: AtomicUsize = AtomicUsize::new(0);
+pub(crate) static SCAN_FILTER_DUPLICATES: AtomicBool = AtomicBool::new(false);
+pub(crate) static SCAN_FILTER_ADDR_ENABLED: AtomicBool = AtomicBool::new(false);
+pub(crate) static mut SCAN_FILTER_ADDR: [u8; 6] = [0; 6];
+pub(crate) static SCAN_FILTER_ADDR_KIND: AtomicUsize = AtomicUsize::new(0);
 // CCMD_WRITE payload reuses SEND_BUF / SEND_LEN (a session is one role only).
 
 // ---- L2CAP outbound SDU (single outstanding; consumed by the l2cap send pump) ----
@@ -541,17 +545,58 @@ pub extern "C" fn runtime_ble_scan_start(
     window_ms: u16,
     timeout_ms: u16,
 ) -> c_int {
+    runtime_ble_scan_start_ex(
+        active,
+        interval_ms,
+        window_ms,
+        timeout_ms,
+        0,
+        core::ptr::null(),
+        0,
+    )
+}
+
+#[no_mangle]
+pub extern "C" fn runtime_ble_scan_start_ex(
+    active: u8,
+    interval_ms: u16,
+    window_ms: u16,
+    timeout_ms: u16,
+    options: u8,
+    filter_addr: *const u8,
+    filter_addr_kind: u8,
+) -> c_int {
     #[cfg(feature = "central")]
     {
         SCAN_ACTIVE.store(active != 0, Ordering::Release);
         SCAN_INTERVAL_MS.store(interval_ms as usize, Ordering::Release);
         SCAN_WINDOW_MS.store(window_ms as usize, Ordering::Release);
         SCAN_TIMEOUT_MS.store(timeout_ms as usize, Ordering::Release);
+        SCAN_FILTER_DUPLICATES.store(options & 0x01 != 0, Ordering::Release);
+        SCAN_FILTER_ADDR_ENABLED.store(!filter_addr.is_null(), Ordering::Release);
+        if !filter_addr.is_null() {
+            unsafe {
+                core::ptr::copy_nonoverlapping(
+                    filter_addr,
+                    core::ptr::addr_of_mut!(SCAN_FILTER_ADDR) as *mut u8,
+                    6,
+                );
+            }
+        }
+        SCAN_FILTER_ADDR_KIND.store(filter_addr_kind as usize, Ordering::Release);
         central_cmd(CCMD_SCAN_START, 0)
     }
     #[cfg(not(feature = "central"))]
     {
-        let _ = (active, interval_ms, window_ms, timeout_ms);
+        let _ = (
+            active,
+            interval_ms,
+            window_ms,
+            timeout_ms,
+            options,
+            filter_addr,
+            filter_addr_kind,
+        );
         RUNTIME_BLE_ERR_INVALID
     }
 }

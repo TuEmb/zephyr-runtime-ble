@@ -17,6 +17,8 @@ use core::sync::atomic::Ordering;
 use core::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 
 use bt_hci::param::{AddrKind, BdAddr, LeAdvEventKind, LeExtAdvDataStatus};
+#[cfg(feature = "central")]
+use bt_hci::param::FilterDuplicates;
 use bt_hci::uuid::BluetoothUuid16;
 use embassy_futures::join::join;
 #[cfg(feature = "central")]
@@ -53,6 +55,7 @@ use crate::{
     CCMD_SCAN_START, CCMD_SCAN_STOP, CCMD_SUBSCRIBE, CCMD_WRITE, CCMD_WRITE_NO_RSP, CENTRAL_ADDR,
     CENTRAL_ADDR_KIND, CENTRAL_CMD, CENTRAL_HANDLE, CENTRAL_UUID, CENTRAL_UUID_LEN, SCAN_ACTIVE,
     SCAN_INTERVAL_MS, SCAN_TIMEOUT_MS, SCAN_WINDOW_MS,
+    SCAN_FILTER_ADDR, SCAN_FILTER_ADDR_ENABLED, SCAN_FILTER_ADDR_KIND, SCAN_FILTER_DUPLICATES,
 };
 #[cfg(feature = "l2cap")]
 use crate::{L2CAP_SEND_BUF, L2CAP_SEND_LEN, L2CAP_SEND_REQ};
@@ -1185,8 +1188,24 @@ async fn run_scan(
     let interval_ms = SCAN_INTERVAL_MS.load(Ordering::Acquire);
     let window_ms = SCAN_WINDOW_MS.load(Ordering::Acquire);
     let timeout_ms = SCAN_TIMEOUT_MS.load(Ordering::Acquire);
+    let mut filter_addr = [Address::random([0u8; 6]); 1];
+    let filter_accept_list = if SCAN_FILTER_ADDR_ENABLED.load(Ordering::Acquire) {
+        let mut a = [0u8; 6];
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                core::ptr::addr_of!(SCAN_FILTER_ADDR) as *const u8,
+                a.as_mut_ptr(),
+                6,
+            );
+        }
+        filter_addr[0] = peer_address(a, SCAN_FILTER_ADDR_KIND.load(Ordering::Acquire) as u8);
+        &filter_addr[..]
+    } else {
+        &[]
+    };
     let scan_config = ScanConfig {
         active: SCAN_ACTIVE.load(Ordering::Acquire),
+        filter_accept_list,
         interval: Duration::from_millis(if interval_ms == 0 {
             100
         } else {
@@ -1194,6 +1213,11 @@ async fn run_scan(
         }),
         window: Duration::from_millis(if window_ms == 0 { 50 } else { window_ms as u64 }),
         timeout: Duration::from_millis(timeout_ms as u64),
+        filter_duplicates: if SCAN_FILTER_DUPLICATES.load(Ordering::Acquire) {
+            FilterDuplicates::Enabled
+        } else {
+            FilterDuplicates::Disabled
+        },
         ..Default::default()
     };
     log_str(cfg, "[central] scanning\0");
