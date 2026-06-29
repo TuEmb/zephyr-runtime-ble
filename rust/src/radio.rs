@@ -59,7 +59,7 @@ use crate::{
     SCAN_INTERVAL_MS, SCAN_PHY_OPTIONS, SCAN_TIMEOUT_MS, SCAN_WINDOW_MS,
 };
 #[cfg(feature = "l2cap")]
-use crate::{L2CAP_SEND_BUF, L2CAP_SEND_LEN, L2CAP_SEND_REQ};
+use crate::{L2CAP_DISCONNECT_REQ, L2CAP_SEND_BUF, L2CAP_SEND_LEN, L2CAP_SEND_REQ};
 use crate::{
     LCMD_CONNECTION_RATE, LCMD_CONN_PARAMS, LCMD_DLE, LCMD_FRAME_SPACE, LCMD_NONE,
     LCMD_PASSKEY_CANCEL, LCMD_PASSKEY_CONFIRM, LCMD_PASSKEY_INPUT, LCMD_READ_ATT_MTU,
@@ -1171,6 +1171,7 @@ async fn l2cap_serve(
         cb(cfg.user);
     }
     L2CAP_SEND_REQ.store(false, Ordering::Release);
+    L2CAP_DISCONNECT_REQ.store(false, Ordering::Release);
     let (mut writer, mut reader) = channel.split();
 
     let recv = async {
@@ -1188,6 +1189,10 @@ async fn l2cap_serve(
     };
     let send = async {
         loop {
+            if L2CAP_DISCONNECT_REQ.swap(false, Ordering::AcqRel) {
+                L2CAP_SEND_REQ.store(false, Ordering::Release);
+                writer.disconnect();
+            }
             if L2CAP_SEND_REQ.load(Ordering::Acquire) {
                 let len = L2CAP_SEND_LEN.load(Ordering::Acquire).min(VALUE_LEN);
                 let mut b = [0u8; VALUE_LEN];

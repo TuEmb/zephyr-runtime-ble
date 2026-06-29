@@ -103,6 +103,9 @@ int main(void)
 	printk("[app] sending '%s' over L2CAP\n", msg);
 	runtime_ble_l2cap_send((const uint8_t *)msg, strlen(msg));
 	k_sleep(K_MSEC(1500)); /* expect the echo back */
+	printk("[app] closing L2CAP channel\n");
+	runtime_ble_l2cap_disconnect();
+	k_sleep(K_MSEC(500));
 	printk("[app] L2CAP central done (echo_received=%d)\n", echo_rx);
 	return 0;
 }

@@ -92,6 +92,12 @@ ZTEST(runtime_ble_edge, test_central_discover_services_requires_central_lib)
 		      "default peripheral lib must reject central service discovery");
 }
 
+ZTEST(runtime_ble_edge, test_l2cap_disconnect_requires_l2cap_lib)
+{
+	zassert_equal(runtime_ble_l2cap_disconnect(), RUNTIME_BLE_ERR_INVALID,
+		      "default peripheral lib must reject L2CAP disconnect");
+}
+
 ZTEST(runtime_ble_edge, test_oob_security_config_init)
 {
 	runtime_ble_config_t cfg = *test_base_cfg();

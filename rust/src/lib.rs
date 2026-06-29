@@ -393,6 +393,7 @@ pub(crate) static SCAN_FILTER_ADDR_KIND: AtomicUsize = AtomicUsize::new(0);
 pub(crate) static L2CAP_SEND_REQ: AtomicBool = AtomicBool::new(false);
 pub(crate) static L2CAP_SEND_LEN: AtomicUsize = AtomicUsize::new(0);
 pub(crate) static mut L2CAP_SEND_BUF: [u8; SEND_BUF_CAP] = [0; SEND_BUF_CAP];
+pub(crate) static L2CAP_DISCONNECT_REQ: AtomicBool = AtomicBool::new(false);
 
 // ---- Active-link control channel (peripheral or central connection) ----
 pub(crate) const LCMD_NONE: u32 = 0;
@@ -891,6 +892,19 @@ pub extern "C" fn runtime_ble_l2cap_send(data: *const u8, len: usize) -> c_int {
     #[cfg(not(feature = "l2cap"))]
     {
         let _ = (data, len);
+        RUNTIME_BLE_ERR_INVALID
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn runtime_ble_l2cap_disconnect() -> c_int {
+    #[cfg(feature = "l2cap")]
+    {
+        L2CAP_DISCONNECT_REQ.store(true, Ordering::Release);
+        RUNTIME_BLE_OK
+    }
+    #[cfg(not(feature = "l2cap"))]
+    {
         RUNTIME_BLE_ERR_INVALID
     }
 }

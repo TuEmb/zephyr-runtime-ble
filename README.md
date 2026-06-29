@@ -260,6 +260,11 @@ advertises + serves incoming centrals while also connecting to `peer_address` as
 a client. See [`examples/dual/`](examples/dual/) (HW-verified: advertises
 `RTBLE-DUAL` while connected as a client).
 
+**L2CAP CoC** — build with `CONFIG_RUNTIME_BLE_L2CAP=y` and set
+`config.l2cap_psm`. Once `on_l2cap_connected` fires, send SDUs with
+`runtime_ble_l2cap_send()` and close the channel with
+`runtime_ble_l2cap_disconnect()`; received SDUs arrive through `on_l2cap_data`.
+
 ## Adding a chip
 1. Add a `<chip> = ["_radio", "embassy-nrf/<chip>", "nrf-sdc/<chip>"]` feature
    in `rust/Cargo.toml`.

@@ -481,6 +481,10 @@ int runtime_ble_client_subscribe_indicate(uint16_t handle);
 /* Queue one SDU to send on the open L2CAP channel (<= the negotiated MTU). */
 int runtime_ble_l2cap_send(const uint8_t *data, size_t len);
 
+/* Close the established L2CAP channel. on_l2cap_disconnected fires once the
+ * channel pump exits. */
+int runtime_ble_l2cap_disconnect(void);
+
 /* ---- Internal (glue <-> staticlib); do not call from the application ---- */
 void runtime_ble_run(int mode);
 void runtime_ble_signal_unload(void);
