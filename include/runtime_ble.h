@@ -76,12 +76,24 @@ extern "C" {
 #define RUNTIME_BLE_PROP_NOTIFY      (1u << 3)
 #define RUNTIME_BLE_PROP_INDICATE    (1u << 4)
 
+/* Optional ATT permission bits for runtime_ble_char_def_t.permissions. A zero
+ * permission mask preserves the default: readable/writable/CCCD operations are
+ * allowed whenever their characteristic property allows the operation. If both
+ * ENCRYPT and AUTH are set for one operation, AUTH wins. */
+#define RUNTIME_BLE_PERM_READ_ENCRYPT   (1u << 0)
+#define RUNTIME_BLE_PERM_READ_AUTH      (1u << 1)
+#define RUNTIME_BLE_PERM_WRITE_ENCRYPT  (1u << 2)
+#define RUNTIME_BLE_PERM_WRITE_AUTH     (1u << 3)
+#define RUNTIME_BLE_PERM_CCCD_ENCRYPT   (1u << 4)
+#define RUNTIME_BLE_PERM_CCCD_AUTH      (1u << 5)
+
 /* One characteristic. `uuid` is little-endian, 2 bytes (16-bit) or 16 (128-bit). */
 typedef struct {
 	const uint8_t *uuid;
 	uint8_t        uuid_len;   /* 2 or 16 */
 	uint16_t       props;      /* RUNTIME_BLE_PROP_* bitmask */
 	uint16_t       max_len;    /* value buffer size in bytes */
+	uint16_t       permissions;/* RUNTIME_BLE_PERM_* bitmask */
 } runtime_ble_char_def_t;
 
 /* One service and its characteristics. */

@@ -103,8 +103,9 @@ The GATT layout and the advertising/GAP parameters are all set in
 ```c
 /* Declare your GATT (or leave services NULL for a built-in NUS). */
 static const runtime_ble_char_def_t chrs[] = {
-    { rx_uuid, 16, RUNTIME_BLE_PROP_WRITE | RUNTIME_BLE_PROP_WRITE_NR, 244 },
-    { tx_uuid, 16, RUNTIME_BLE_PROP_NOTIFY, 244 },
+    { rx_uuid, 16, RUNTIME_BLE_PROP_WRITE | RUNTIME_BLE_PROP_WRITE_NR, 244, 0 },
+    { tx_uuid, 16, RUNTIME_BLE_PROP_NOTIFY, 244,
+      RUNTIME_BLE_PERM_CCCD_ENCRYPT },
 };
 static const runtime_ble_service_def_t svcs[] = {
     { svc_uuid, 16, chrs, 2 },
@@ -132,6 +133,10 @@ Characteristics are addressed by **flat index** (declaration order). Callbacks:
 when a peer writes a CCCD, `on_conn_params`, `on_phy_update`,
 `on_data_length_update`, `on_security_event`, `on_log`. They run on the BLE
 thread — keep them short.
+
+Set `runtime_ble_char_def_t.permissions` with `RUNTIME_BLE_PERM_READ_*`,
+`RUNTIME_BLE_PERM_WRITE_*`, or `RUNTIME_BLE_PERM_CCCD_*` to require encrypted or
+authenticated links for individual ATT operations.
 
 ## Roles: peripheral (default) and central
 By default the runtime is a **peripheral** (advertise + GATT server, above). It

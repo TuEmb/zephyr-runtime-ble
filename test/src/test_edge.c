@@ -58,6 +58,36 @@ ZTEST(runtime_ble_edge, test_security_argument_validation)
 		      "passkey must be a 6-digit value");
 }
 
+ZTEST(runtime_ble_edge, test_gatt_permission_flags_init)
+{
+	static const uint8_t svc_uuid[16] = {0x9e, 0xca, 0xdc, 0x24, 0x0e, 0xe5, 0xa9, 0xe0,
+					     0x93, 0xf3, 0xa3, 0xb5, 0x11, 0x00, 0x4c, 0xe5};
+	static const uint8_t chr_uuid[16] = {0x9e, 0xca, 0xdc, 0x24, 0x0e, 0xe5, 0xa9, 0xe0,
+					     0x93, 0xf3, 0xa3, 0xb5, 0x12, 0x00, 0x4c, 0xe5};
+	static const runtime_ble_char_def_t chars[] = {
+		{ .uuid = chr_uuid,
+		  .uuid_len = sizeof(chr_uuid),
+		  .props = RUNTIME_BLE_PROP_READ | RUNTIME_BLE_PROP_WRITE |
+			   RUNTIME_BLE_PROP_NOTIFY,
+		  .max_len = 32,
+		  .permissions = RUNTIME_BLE_PERM_READ_ENCRYPT |
+				 RUNTIME_BLE_PERM_WRITE_AUTH |
+				 RUNTIME_BLE_PERM_CCCD_ENCRYPT },
+	};
+	static const runtime_ble_service_def_t services[] = {
+		{ .uuid = svc_uuid, .uuid_len = sizeof(svc_uuid), .chars = chars, .num_chars = 1 },
+	};
+	runtime_ble_config_t cfg = *test_base_cfg();
+
+	cfg.services = services;
+	cfg.num_services = 1;
+	cfg.security_bondable = 1;
+	zassert_equal(runtime_ble_init(&cfg), RUNTIME_BLE_OK, "permission config init failed");
+	test_load_settled();
+	zassert_equal(runtime_ble_unload(), RUNTIME_BLE_OK, "cleanup unload failed");
+	zassert_equal(runtime_ble_init(test_base_cfg()), RUNTIME_BLE_OK, "restore base cfg failed");
+}
+
 /* With no session/central, the single outstanding-send slot fills after one
  * queued send; a second send reports the queue is full (no crash, no overwrite).
  * A subsequent load() resets the slot and unload() returns the RAM. */

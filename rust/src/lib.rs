@@ -120,6 +120,7 @@ pub struct RuntimeBleCharDef {
     pub uuid_len: u8,
     pub props: u16,
     pub max_len: u16,
+    pub permissions: u16,
 }
 
 /// C ABI: one service + its characteristics (must match runtime_ble.h).

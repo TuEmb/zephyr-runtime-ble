@@ -23,7 +23,9 @@ use embassy_time::{Duration, Timer};
 use embassy_time_driver::Driver;
 use embassy_time_queue_utils::Queue;
 use nrf_sdc::mpsl::MultiprotocolServiceLayer;
-use trouble_host::attribute::{AttributeTable, Characteristic, CharacteristicProps, Service};
+use trouble_host::attribute::{
+    AttributeTable, Characteristic, CharacteristicProps, PermissionLevel, Service,
+};
 use trouble_host::connection::RequestedConnParams;
 #[cfg(feature = "central")]
 use trouble_host::connection::{ConnectConfig, ScanConfig};
@@ -179,6 +181,12 @@ const C_PROP_WRITE: u16 = 1 << 1;
 const C_PROP_WRITE_NR: u16 = 1 << 2;
 const C_PROP_NOTIFY: u16 = 1 << 3;
 const C_PROP_INDICATE: u16 = 1 << 4;
+const C_PERM_READ_ENCRYPT: u16 = 1 << 0;
+const C_PERM_READ_AUTH: u16 = 1 << 1;
+const C_PERM_WRITE_ENCRYPT: u16 = 1 << 2;
+const C_PERM_WRITE_AUTH: u16 = 1 << 3;
+const C_PERM_CCCD_ENCRYPT: u16 = 1 << 4;
+const C_PERM_CCCD_AUTH: u16 = 1 << 5;
 
 fn map_props(props: u16) -> CharacteristicProps {
     let mut b: u8 = 0;
@@ -198,6 +206,16 @@ fn map_props(props: u16) -> CharacteristicProps {
         b |= 0x20; // Indicate
     }
     CharacteristicProps::from(b)
+}
+
+fn map_permission(mask: u16, encrypt_bit: u16, auth_bit: u16) -> Option<PermissionLevel> {
+    if mask & auth_bit != 0 {
+        Some(PermissionLevel::AuthenticationRequired)
+    } else if mask & encrypt_bit != 0 {
+        Some(PermissionLevel::EncryptionRequired)
+    } else {
+        None
+    }
 }
 
 // Reverse of map_props: BLE CharacteristicProp bits -> C property bits, for
@@ -311,15 +329,30 @@ fn build_gatt(cfg: &RuntimeCfg, name: &'static str) -> Option<Gatt> {
                 unsafe { core::slice::from_raw_parts(s.chars, s.num_chars as usize) };
             for c in cdefs {
                 let cuuid = unsafe { uuid_from(c.uuid, c.uuid_len) };
-                chars.push(
-                    svc.add_characteristic(
-                        cuuid,
-                        map_props(c.props),
-                        [0u8; VALUE_LEN],
-                        alloc_store(&mut stores),
-                    )
-                    .build(),
+                let mut chr = svc.add_characteristic(
+                    cuuid,
+                    map_props(c.props),
+                    [0u8; VALUE_LEN],
+                    alloc_store(&mut stores),
                 );
+                if let Some(level) =
+                    map_permission(c.permissions, C_PERM_READ_ENCRYPT, C_PERM_READ_AUTH)
+                {
+                    chr = chr.read_permission(level);
+                }
+                if let Some(level) =
+                    map_permission(c.permissions, C_PERM_WRITE_ENCRYPT, C_PERM_WRITE_AUTH)
+                {
+                    chr = chr.write_permission(level);
+                }
+                if c.props & (C_PROP_NOTIFY | C_PROP_INDICATE) != 0 {
+                    if let Some(level) =
+                        map_permission(c.permissions, C_PERM_CCCD_ENCRYPT, C_PERM_CCCD_AUTH)
+                    {
+                        chr = chr.cccd_permission(level);
+                    }
+                }
+                chars.push(chr.build());
                 props.push(c.props);
             }
         }
