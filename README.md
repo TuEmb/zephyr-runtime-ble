@@ -161,6 +161,7 @@ Characteristics are addressed by **flat index** (declaration order). Callbacks:
 `on_connected`, `on_disconnected`, `on_write(chr, …)`, `on_read_value(chr, …)`
 (or `on_descriptor_write(handle, chr, desc, …)` /
 `on_descriptor_read_value(handle, chr, desc, …)` for user-defined descriptors)
+(or `on_write_ext` / `on_descriptor_write_ext` when the app needs ATT offsets)
 (or `on_data` for the built-in NUS RX), `on_subscription(chr, notify, indicate)`
 when a peer writes a CCCD, `on_conn_params`, `on_phy_update`,
 `on_data_length_update`, `on_att_mtu`, `on_frame_space`, `on_connection_rate`,

@@ -213,6 +213,22 @@ pub struct RuntimeBleCallbacks {
     /// Current security state read result.
     pub on_security_state:
         Option<extern "C" fn(level: u8, key_len: u8, flags: u8, user: *mut c_void)>,
+    /// Peripheral: peer wrote to a characteristic, including ATT offset.
+    pub on_write_ext: Option<
+        extern "C" fn(chr: u16, offset: u16, data: *const u8, len: usize, user: *mut c_void),
+    >,
+    /// Peripheral: peer wrote to a descriptor, including ATT offset.
+    pub on_descriptor_write_ext: Option<
+        extern "C" fn(
+            handle: u16,
+            chr: u16,
+            desc: u8,
+            offset: u16,
+            data: *const u8,
+            len: usize,
+            user: *mut c_void,
+        ),
+    >,
 }
 
 /// C ABI: one read-only descriptor (must match runtime_ble.h).

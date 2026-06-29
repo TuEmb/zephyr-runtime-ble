@@ -46,6 +46,29 @@ static void on_security_state(uint8_t level, uint8_t key_len, uint8_t flags, voi
 	ARG_UNUSED(user);
 }
 
+static void on_write_ext(uint16_t chr, uint16_t offset, const uint8_t *data, size_t len,
+			 void *user)
+{
+	ARG_UNUSED(chr);
+	ARG_UNUSED(offset);
+	ARG_UNUSED(data);
+	ARG_UNUSED(len);
+	ARG_UNUSED(user);
+}
+
+static void on_descriptor_write_ext(uint16_t handle, uint16_t chr, uint8_t desc,
+				    uint16_t offset, const uint8_t *data, size_t len,
+				    void *user)
+{
+	ARG_UNUSED(handle);
+	ARG_UNUSED(chr);
+	ARG_UNUSED(desc);
+	ARG_UNUSED(offset);
+	ARG_UNUSED(data);
+	ARG_UNUSED(len);
+	ARG_UNUSED(user);
+}
+
 ZTEST_SUITE(runtime_ble_edge, NULL, edge_setup, NULL, NULL, NULL);
 
 ZTEST(runtime_ble_edge, test_init_null_is_rejected)
@@ -173,6 +196,19 @@ ZTEST(runtime_ble_edge, test_security_state_callback_config_init)
 	cfg.callbacks.on_security_state = on_security_state;
 	zassert_equal(runtime_ble_init(&cfg), RUNTIME_BLE_OK,
 		      "security state callback init failed");
+	test_load_settled();
+	zassert_equal(runtime_ble_unload(), RUNTIME_BLE_OK, "cleanup unload failed");
+	zassert_equal(runtime_ble_init(test_base_cfg()), RUNTIME_BLE_OK, "restore base cfg failed");
+}
+
+ZTEST(runtime_ble_edge, test_extended_write_callback_config_init)
+{
+	runtime_ble_config_t cfg = *test_base_cfg();
+
+	cfg.callbacks.on_write_ext = on_write_ext;
+	cfg.callbacks.on_descriptor_write_ext = on_descriptor_write_ext;
+	zassert_equal(runtime_ble_init(&cfg), RUNTIME_BLE_OK,
+		      "extended write callback init failed");
 	test_load_settled();
 	zassert_equal(runtime_ble_unload(), RUNTIME_BLE_OK, "cleanup unload failed");
 	zassert_equal(runtime_ble_init(test_base_cfg()), RUNTIME_BLE_OK, "restore base cfg failed");

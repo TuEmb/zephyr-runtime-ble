@@ -2592,8 +2592,10 @@ async fn connection_task(
                         if idx == usize::MAX && sub_idx == usize::MAX {
                             desc_meta = gatt.descriptors.iter().copied().find(|d| d.handle == h);
                         }
+                        let mut offset = 0u16;
                         if idx != usize::MAX || sub_idx != usize::MAX || desc_meta.is_some() {
-                            w.with_data(|_off, data| {
+                            w.with_data(|off, data| {
+                                offset = off.min(u16::MAX as usize) as u16;
                                 n = data.len().min(VALUE_LEN);
                                 buf[..n].copy_from_slice(&data[..n]);
                                 if sub_idx != usize::MAX && data.len() >= 2 {
@@ -2611,6 +2613,8 @@ async fn connection_task(
                                 if let Some(cb) = cfg.callbacks.on_data {
                                     cb(buf.as_ptr(), n, cfg.user);
                                 }
+                            } else if let Some(cb) = cfg.callbacks.on_write_ext {
+                                cb(idx as u16, offset, buf.as_ptr(), n, cfg.user);
                             } else if let Some(cb) = cfg.callbacks.on_write {
                                 cb(idx as u16, buf.as_ptr(), n, cfg.user);
                             }
@@ -2619,7 +2623,17 @@ async fn connection_task(
                                 cb(sub_idx as u16, notify_enabled, indicate_enabled, cfg.user);
                             }
                         } else if let Some(meta) = desc_meta {
-                            if let Some(cb) = cfg.callbacks.on_descriptor_write {
+                            if let Some(cb) = cfg.callbacks.on_descriptor_write_ext {
+                                cb(
+                                    meta.handle,
+                                    meta.chr,
+                                    meta.desc,
+                                    offset,
+                                    buf.as_ptr(),
+                                    n,
+                                    cfg.user,
+                                );
+                            } else if let Some(cb) = cfg.callbacks.on_descriptor_write {
                                 cb(meta.handle, meta.chr, meta.desc, buf.as_ptr(), n, cfg.user);
                             }
                         }

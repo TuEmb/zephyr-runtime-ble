@@ -292,6 +292,13 @@ typedef struct {
 	 * RUNTIME_BLE_SECURITY_LEVEL_*; `key_len` is 0 when unavailable; `flags`
 	 * uses RUNTIME_BLE_SECURITY_FLAG_*. */
 	void (*on_security_state)(uint8_t level, uint8_t key_len, uint8_t flags, void *user);
+	/* Extended write callbacks include the ATT offset. If set, these are used
+	 * instead of on_write/on_descriptor_write for the corresponding write. */
+	void (*on_write_ext)(uint16_t chr, uint16_t offset, const uint8_t *data,
+			     size_t len, void *user);
+	void (*on_descriptor_write_ext)(uint16_t handle, uint16_t chr, uint8_t desc,
+					uint16_t offset, const uint8_t *data, size_t len,
+					void *user);
 } runtime_ble_callbacks_t;
 
 /*
