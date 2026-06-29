@@ -84,6 +84,7 @@ static void on_connected(void *user)
 	ARG_UNUSED(user);
 	printk("[app] central connected\n");
 	(void)runtime_ble_read_rssi();
+	(void)runtime_ble_read_security();
 	(void)runtime_ble_update_frame_space(0, 0, RUNTIME_BLE_PHY_MASK_1M,
 					     RUNTIME_BLE_FRAME_SPACE_ACL_CP |
 					     RUNTIME_BLE_FRAME_SPACE_ACL_PC);
@@ -159,6 +160,13 @@ static void on_security_event(uint8_t event, uint8_t level, uint32_t passkey, ui
 	}
 }
 
+static void on_security_state(uint8_t level, uint8_t key_len, uint8_t flags, void *user)
+{
+	ARG_UNUSED(user);
+	printk("[app] security state level=%u key_len=%u flags=0x%02x\n",
+	       level, key_len, flags);
+}
+
 static size_t on_bond_load(uint8_t index, uint8_t *out, size_t max_len, void *user)
 {
 	ARG_UNUSED(user);
@@ -208,6 +216,7 @@ int main(void)
 			.on_frame_space = on_frame_space,
 			.on_connection_rate = on_connection_rate,
 			.on_security_event = on_security_event,
+			.on_security_state = on_security_state,
 			.on_bond_load = on_bond_load,
 			.on_bond_store = on_bond_store,
 			.on_log = on_log,

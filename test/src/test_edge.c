@@ -38,6 +38,14 @@ static void on_descriptor_write(uint16_t handle, uint16_t chr, uint8_t desc,
 	ARG_UNUSED(user);
 }
 
+static void on_security_state(uint8_t level, uint8_t key_len, uint8_t flags, void *user)
+{
+	ARG_UNUSED(level);
+	ARG_UNUSED(key_len);
+	ARG_UNUSED(flags);
+	ARG_UNUSED(user);
+}
+
 ZTEST_SUITE(runtime_ble_edge, NULL, edge_setup, NULL, NULL, NULL);
 
 ZTEST(runtime_ble_edge, test_init_null_is_rejected)
@@ -153,6 +161,18 @@ ZTEST(runtime_ble_edge, test_oob_security_config_init)
 	cfg.security_oob_available = 1;
 	cfg.security_request_on_connect = 1;
 	zassert_equal(runtime_ble_init(&cfg), RUNTIME_BLE_OK, "OOB security config init failed");
+	test_load_settled();
+	zassert_equal(runtime_ble_unload(), RUNTIME_BLE_OK, "cleanup unload failed");
+	zassert_equal(runtime_ble_init(test_base_cfg()), RUNTIME_BLE_OK, "restore base cfg failed");
+}
+
+ZTEST(runtime_ble_edge, test_security_state_callback_config_init)
+{
+	runtime_ble_config_t cfg = *test_base_cfg();
+
+	cfg.callbacks.on_security_state = on_security_state;
+	zassert_equal(runtime_ble_init(&cfg), RUNTIME_BLE_OK,
+		      "security state callback init failed");
 	test_load_settled();
 	zassert_equal(runtime_ble_unload(), RUNTIME_BLE_OK, "cleanup unload failed");
 	zassert_equal(runtime_ble_init(test_base_cfg()), RUNTIME_BLE_OK, "restore base cfg failed");

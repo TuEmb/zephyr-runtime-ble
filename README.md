@@ -145,6 +145,7 @@ runtime_ble_update_data_length(251, 2120);
 runtime_ble_update_conn_params(30, 60, 0, 4000);
 runtime_ble_read_att_mtu();      // -> on_att_mtu(att_mtu)
 runtime_ble_read_phy();          // -> on_phy_update(tx, rx)
+runtime_ble_read_security();     // -> on_security_state(level, key_len, flags)
 runtime_ble_request_security();  // pairing/encryption; events -> on_security_event
 runtime_ble_unload();            // tear down, free session RAM
 ```
@@ -163,7 +164,7 @@ Characteristics are addressed by **flat index** (declaration order). Callbacks:
 (or `on_data` for the built-in NUS RX), `on_subscription(chr, notify, indicate)`
 when a peer writes a CCCD, `on_conn_params`, `on_phy_update`,
 `on_data_length_update`, `on_att_mtu`, `on_frame_space`, `on_connection_rate`,
-`on_rssi`, `on_security_event`, `on_bond_load`, `on_bond_store`,
+`on_rssi`, `on_security_event`, `on_security_state`, `on_bond_load`,
 `on_oob_request`, `on_oob_local_data`, `on_log`. They run on the BLE thread —
 keep them short.
 Characteristics may include static descriptors, such as User Description
@@ -187,6 +188,10 @@ connection-parameter, frame-spacing, and connection-rate/subrate updates with
 `on_phy_update`, `on_data_length_update`, `on_conn_params`,
 `on_frame_space`, and `on_connection_rate` when the controller/peer reports
 them.
+
+Call `runtime_ble_read_security()` to snapshot the active link's current
+security level, encryption key length (0 when unavailable), and bonded-peer
+flag through `on_security_state`.
 
 Set `runtime_ble_char_def_t.permissions` with `RUNTIME_BLE_PERM_READ_*`,
 `RUNTIME_BLE_PERM_WRITE_*`, or `RUNTIME_BLE_PERM_CCCD_*` to require encrypted or

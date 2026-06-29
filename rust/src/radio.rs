@@ -64,11 +64,11 @@ use crate::{L2CAP_DISCONNECT_REQ, L2CAP_SEND_BUF, L2CAP_SEND_LEN, L2CAP_SEND_REQ
 use crate::{
     LCMD_CONNECTION_RATE, LCMD_CONN_PARAMS, LCMD_DLE, LCMD_FRAME_SPACE, LCMD_NONE,
     LCMD_PASSKEY_CANCEL, LCMD_PASSKEY_CONFIRM, LCMD_PASSKEY_INPUT, LCMD_READ_ATT_MTU,
-    LCMD_READ_PHY, LCMD_READ_RSSI, LCMD_SECURITY_REQUEST, LCMD_SET_PHY, LINK_CMD,
-    LINK_CONN_LATENCY, LINK_CONN_MAX_MS, LINK_CONN_MIN_MS, LINK_CONN_TIMEOUT_MS, LINK_DLE_OCTETS,
-    LINK_DLE_TIME_US, LINK_FRAME_SPACE_MAX_US, LINK_FRAME_SPACE_MIN_US, LINK_FRAME_SPACE_PHY_MASK,
-    LINK_FRAME_SPACE_TYPES, LINK_PASSKEY, LINK_PHY, LINK_RATE_CONTINUATION, LINK_RATE_SUBRATE_MAX,
-    LINK_RATE_SUBRATE_MIN,
+    LCMD_READ_PHY, LCMD_READ_RSSI, LCMD_READ_SECURITY, LCMD_SECURITY_REQUEST, LCMD_SET_PHY,
+    LINK_CMD, LINK_CONN_LATENCY, LINK_CONN_MAX_MS, LINK_CONN_MIN_MS, LINK_CONN_TIMEOUT_MS,
+    LINK_DLE_OCTETS, LINK_DLE_TIME_US, LINK_FRAME_SPACE_MAX_US, LINK_FRAME_SPACE_MIN_US,
+    LINK_FRAME_SPACE_PHY_MASK, LINK_FRAME_SPACE_TYPES, LINK_PASSKEY, LINK_PHY,
+    LINK_RATE_CONTINUATION, LINK_RATE_SUBRATE_MAX, LINK_RATE_SUBRATE_MIN,
 };
 
 // Per-chip bring-up. Exactly one chip feature is enabled; `chip::run` is the
@@ -945,6 +945,14 @@ fn emit_security_event(
     }
 }
 
+fn emit_security_state(conn: &Connection<'_, DefaultPacketPool>, cfg: &RuntimeCfg) {
+    if let Some(cb) = cfg.callbacks.on_security_state {
+        let level = conn.security_level().map(security_level_to_c).unwrap_or(0);
+        let flags = if conn.is_bonded_peer() { 1 } else { 0 };
+        cb(level, 0, flags, cfg.user);
+    }
+}
+
 fn load_oob_data(cfg: &RuntimeCfg) -> Option<(OobData, OobData)> {
     emit_security_event(
         cfg,
@@ -1161,6 +1169,7 @@ async fn link_control_once(
                 }
             }
         }
+        LCMD_READ_SECURITY => emit_security_state(conn, cfg),
         _ => {}
     }
 }

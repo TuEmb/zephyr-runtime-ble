@@ -288,6 +288,10 @@ typedef struct {
 	 * If NULL, the stored descriptor value is returned. */
 	size_t (*on_descriptor_read_value)(uint16_t handle, uint16_t chr, uint8_t desc,
 					   uint8_t *out, size_t max_len, void *user);
+	/* Current security state for runtime_ble_read_security(). `level` is
+	 * RUNTIME_BLE_SECURITY_LEVEL_*; `key_len` is 0 when unavailable; `flags`
+	 * uses RUNTIME_BLE_SECURITY_FLAG_*. */
+	void (*on_security_state)(uint8_t level, uint8_t key_len, uint8_t flags, void *user);
 } runtime_ble_callbacks_t;
 
 /*
@@ -424,6 +428,9 @@ int runtime_ble_read_att_mtu(void);
 
 /* Read the current link PHY on the active connection; result arrives via on_phy_update. */
 int runtime_ble_read_phy(void);
+
+/* Read the current link security state; result arrives via on_security_state. */
+int runtime_ble_read_security(void);
 
 /* Request pairing/encryption on the active link. */
 int runtime_ble_request_security(void);
