@@ -132,6 +132,16 @@ extern "C" {
 #define RUNTIME_BLE_PERM_CCCD_ENCRYPT   (1u << 4)
 #define RUNTIME_BLE_PERM_CCCD_AUTH      (1u << 5)
 
+/* One read-only descriptor. `uuid` is little-endian, 2 bytes (16-bit) or 16
+ * (128-bit). `value` points to static bytes. */
+typedef struct {
+	const uint8_t *uuid;
+	uint8_t        uuid_len;   /* 2 or 16 */
+	const uint8_t *value;
+	uint16_t       value_len;
+	uint16_t       permissions;/* RUNTIME_BLE_PERM_READ_* bitmask */
+} runtime_ble_desc_def_t;
+
 /* One characteristic. `uuid` is little-endian, 2 bytes (16-bit) or 16 (128-bit). */
 typedef struct {
 	const uint8_t *uuid;
@@ -139,6 +149,8 @@ typedef struct {
 	uint16_t       props;      /* RUNTIME_BLE_PROP_* bitmask */
 	uint16_t       max_len;    /* value buffer size in bytes */
 	uint16_t       permissions;/* RUNTIME_BLE_PERM_* bitmask */
+	const runtime_ble_desc_def_t *descriptors;
+	uint8_t        num_descriptors;
 } runtime_ble_char_def_t;
 
 /* One service and its characteristics. */
@@ -288,7 +300,8 @@ typedef struct {
 	uint8_t                 directed_high_duty;   /* 1 -> high-duty directed advertising */
 	/* User-defined GATT. NULL/0 -> built-in NUS. Otherwise built at load time;
 	 * use on_write + runtime_ble_notify() with the flat characteristic index.
-	 * The array + its uuid buffers must outlive the BLE session (static). */
+	 * The service/characteristic/descriptor arrays and their uuid/value buffers
+	 * must outlive the BLE session (static). */
 	const runtime_ble_service_def_t *services;
 	uint8_t                          num_services;
 

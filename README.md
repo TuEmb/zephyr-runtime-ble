@@ -102,13 +102,22 @@ The GATT layout and the advertising/GAP parameters are all set in
 `runtime_ble_config_t` — no Rust rebuild needed to define your own services.
 ```c
 /* Declare your GATT (or leave services NULL for a built-in NUS). */
+static const uint8_t user_desc_uuid[2] = { 0x01, 0x29 };
+static const uint8_t tx_desc[] = "Echo notifications";
+static const runtime_ble_desc_def_t tx_descs[] = {
+    { .uuid = user_desc_uuid, .uuid_len = sizeof(user_desc_uuid),
+      .value = tx_desc, .value_len = sizeof(tx_desc) - 1 },
+};
 static const runtime_ble_char_def_t chrs[] = {
-    { rx_uuid, 16, RUNTIME_BLE_PROP_WRITE | RUNTIME_BLE_PROP_WRITE_NR, 244, 0 },
-    { tx_uuid, 16, RUNTIME_BLE_PROP_NOTIFY, 244,
-      RUNTIME_BLE_PERM_CCCD_ENCRYPT },
+    { .uuid = rx_uuid, .uuid_len = 16,
+      .props = RUNTIME_BLE_PROP_WRITE | RUNTIME_BLE_PROP_WRITE_NR, .max_len = 244 },
+    { .uuid = tx_uuid, .uuid_len = 16,
+      .props = RUNTIME_BLE_PROP_NOTIFY, .max_len = 244,
+      .permissions = RUNTIME_BLE_PERM_CCCD_ENCRYPT,
+      .descriptors = tx_descs, .num_descriptors = 1 },
 };
 static const runtime_ble_service_def_t svcs[] = {
-    { svc_uuid, 16, chrs, 2 },
+    { .uuid = svc_uuid, .uuid_len = 16, .chars = chrs, .num_chars = 2 },
 };
 static const uint8_t svc_data_uuid[2] = { 0xF0, 0xFE }, svc_data[] = { 0x01, 0x64 };
 static const runtime_ble_config_t cfg = {
@@ -155,6 +164,9 @@ when a peer writes a CCCD, `on_conn_params`, `on_phy_update`,
 `on_rssi`, `on_security_event`, `on_bond_load`, `on_bond_store`,
 `on_oob_request`, `on_oob_local_data`, `on_log`. They run on the BLE thread —
 keep them short.
+Characteristics may include static read-only descriptors, such as User
+Description (`0x2901`); descriptor UUID/value buffers must remain valid for the
+loaded session.
 
 Use `runtime_ble_indicate()` when a characteristic advertises
 `RUNTIME_BLE_PROP_INDICATE` and the app needs ATT confirmation semantics. The

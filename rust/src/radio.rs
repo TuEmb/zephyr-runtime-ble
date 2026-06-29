@@ -31,7 +31,7 @@ use embassy_time_queue_utils::Queue;
 use nrf_sdc::mpsl::MultiprotocolServiceLayer;
 use trouble_host::advertise::{AdvChannelMap, TxPower};
 use trouble_host::attribute::{
-    AttributeTable, Characteristic, CharacteristicProps, PermissionLevel, Service,
+    AttPermissions, AttributeTable, Characteristic, CharacteristicProps, PermissionLevel, Service,
 };
 #[cfg(feature = "central")]
 use trouble_host::connection::{ConnectConfig, PhySet, ScanConfig};
@@ -235,6 +235,14 @@ fn map_permission(mask: u16, encrypt_bit: u16, auth_bit: u16) -> Option<Permissi
     }
 }
 
+fn descriptor_permissions(mask: u16) -> AttPermissions {
+    AttPermissions {
+        read: map_permission(mask, C_PERM_READ_ENCRYPT, C_PERM_READ_AUTH)
+            .unwrap_or(PermissionLevel::Allowed),
+        write: PermissionLevel::NotAllowed,
+    }
+}
+
 // Reverse of map_props: BLE CharacteristicProp bits -> C property bits, for
 // reporting a discovered characteristic's properties to on_discovered.
 #[cfg(feature = "central")]
@@ -378,6 +386,23 @@ fn build_gatt(cfg: &RuntimeCfg, name: &'static str) -> Option<Gatt> {
                         map_permission(c.permissions, C_PERM_CCCD_ENCRYPT, C_PERM_CCCD_AUTH)
                     {
                         chr = chr.cccd_permission(level);
+                    }
+                }
+                if !c.descriptors.is_null() && c.num_descriptors != 0 {
+                    let descs = unsafe {
+                        core::slice::from_raw_parts(c.descriptors, c.num_descriptors as usize)
+                    };
+                    for d in descs {
+                        let value = if d.value.is_null() {
+                            &[][..]
+                        } else {
+                            unsafe { core::slice::from_raw_parts(d.value, d.value_len as usize) }
+                        };
+                        chr.add_descriptor_ro::<[u8], _>(
+                            unsafe { uuid_from(d.uuid, d.uuid_len) },
+                            descriptor_permissions(d.permissions).read,
+                            value,
+                        );
                     }
                 }
                 chars.push(chr.build());

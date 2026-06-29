@@ -188,6 +188,17 @@ pub struct RuntimeBleCallbacks {
     pub on_l2cap_disconnected: Option<extern "C" fn(user: *mut c_void)>,
 }
 
+/// C ABI: one read-only descriptor (must match runtime_ble.h).
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct RuntimeBleDescDef {
+    pub uuid: *const u8,
+    pub uuid_len: u8,
+    pub value: *const u8,
+    pub value_len: u16,
+    pub permissions: u16,
+}
+
 /// C ABI: one characteristic (must match runtime_ble.h).
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -197,6 +208,8 @@ pub struct RuntimeBleCharDef {
     pub props: u16,
     pub max_len: u16,
     pub permissions: u16,
+    pub descriptors: *const RuntimeBleDescDef,
+    pub num_descriptors: u8,
 }
 
 /// C ABI: one service + its characteristics (must match runtime_ble.h).
