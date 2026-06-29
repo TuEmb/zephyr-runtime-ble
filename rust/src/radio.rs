@@ -310,11 +310,19 @@ struct Gatt {
     server: Box<Srv>,
     chars: Vec<Characteristic<[u8; VALUE_LEN]>>,
     props: Vec<u16>,
+    descriptors: Vec<DescMeta>,
     nus_rx: usize,
     nus_tx: usize,
     stores: Vec<*mut [u8; VALUE_LEN]>,
     appearance_store: Option<*mut BluetoothUuid16>,
     bond_slots: RefCell<heapless::Vec<(Identity, u8), BOND_SLOT_CAP>>,
+}
+
+#[derive(Clone, Copy)]
+struct DescMeta {
+    handle: u16,
+    chr: u16,
+    desc: u8,
 }
 
 fn build_gatt(cfg: &RuntimeCfg, name: &'static str) -> Option<Gatt> {
@@ -337,6 +345,7 @@ fn build_gatt(cfg: &RuntimeCfg, name: &'static str) -> Option<Gatt> {
 
     let mut chars: Vec<Characteristic<[u8; VALUE_LEN]>> = Vec::new();
     let mut props: Vec<u16> = Vec::new();
+    let mut descriptors: Vec<DescMeta> = Vec::new();
     let mut stores: Vec<*mut [u8; VALUE_LEN]> = Vec::new();
     let (mut nus_rx, mut nus_tx) = (usize::MAX, usize::MAX);
 
@@ -374,6 +383,7 @@ fn build_gatt(cfg: &RuntimeCfg, name: &'static str) -> Option<Gatt> {
             let cdefs: &[RuntimeBleCharDef] =
                 unsafe { core::slice::from_raw_parts(s.chars, s.num_chars as usize) };
             for c in cdefs {
+                let chr_index = chars.len() as u16;
                 let cuuid = unsafe { uuid_from(c.uuid, c.uuid_len) };
                 let mut chr = svc.add_characteristic(
                     cuuid,
@@ -402,7 +412,7 @@ fn build_gatt(cfg: &RuntimeCfg, name: &'static str) -> Option<Gatt> {
                     let descs = unsafe {
                         core::slice::from_raw_parts(c.descriptors, c.num_descriptors as usize)
                     };
-                    for d in descs {
+                    for (desc_index, d) in descs.iter().enumerate() {
                         let value = if d.value.is_null() {
                             &[][..]
                         } else {
@@ -410,14 +420,21 @@ fn build_gatt(cfg: &RuntimeCfg, name: &'static str) -> Option<Gatt> {
                         };
                         let uuid = unsafe { uuid_from(d.uuid, d.uuid_len) };
                         let permissions = descriptor_permissions(d.permissions);
-                        if descriptor_is_writable(d.permissions) {
+                        let handle = if descriptor_is_writable(d.permissions) {
                             let len = value.len().min(VALUE_LEN);
                             let mut init: heapless::Vec<u8, VALUE_LEN> = heapless::Vec::new();
                             let _ = init.extend_from_slice(&value[..len]);
-                            chr.add_descriptor(uuid, permissions, init, alloc_store(&mut stores));
+                            chr.add_descriptor(uuid, permissions, init, alloc_store(&mut stores))
+                                .handle()
                         } else {
-                            chr.add_descriptor_ro::<[u8], _>(uuid, permissions.read, value);
-                        }
+                            chr.add_descriptor_ro::<[u8], _>(uuid, permissions.read, value)
+                                .handle()
+                        };
+                        descriptors.push(DescMeta {
+                            handle,
+                            chr: chr_index,
+                            desc: desc_index.min(u8::MAX as usize) as u8,
+                        });
                     }
                 }
                 chars.push(chr.build());
@@ -430,6 +447,7 @@ fn build_gatt(cfg: &RuntimeCfg, name: &'static str) -> Option<Gatt> {
         server: Box::new(AttributeServer::new(table)),
         chars,
         props,
+        descriptors,
         nus_rx,
         nus_tx,
         stores,
@@ -2517,6 +2535,7 @@ async fn connection_task(
                         let mut n = 0usize;
                         let mut idx = usize::MAX;
                         let mut sub_idx = usize::MAX;
+                        let mut desc_meta = None;
                         let mut notify_enabled = 0u8;
                         let mut indicate_enabled = 0u8;
                         let h = w.handle();
@@ -2529,7 +2548,10 @@ async fn connection_task(
                                 break;
                             }
                         }
-                        if idx != usize::MAX || sub_idx != usize::MAX {
+                        if idx == usize::MAX && sub_idx == usize::MAX {
+                            desc_meta = gatt.descriptors.iter().copied().find(|d| d.handle == h);
+                        }
+                        if idx != usize::MAX || sub_idx != usize::MAX || desc_meta.is_some() {
                             w.with_data(|_off, data| {
                                 n = data.len().min(VALUE_LEN);
                                 buf[..n].copy_from_slice(&data[..n]);
@@ -2555,6 +2577,10 @@ async fn connection_task(
                             if let Some(cb) = cfg.callbacks.on_subscription {
                                 cb(sub_idx as u16, notify_enabled, indicate_enabled, cfg.user);
                             }
+                        } else if let Some(meta) = desc_meta {
+                            if let Some(cb) = cfg.callbacks.on_descriptor_write {
+                                cb(meta.handle, meta.chr, meta.desc, buf.as_ptr(), n, cfg.user);
+                            }
                         }
                     }
                     GattEvent::Read(r) => {
@@ -2571,6 +2597,24 @@ async fn connection_task(
                                 let mut out = [0u8; VALUE_LEN];
                                 let n = cb(idx as u16, out.as_mut_ptr(), out.len(), cfg.user)
                                     .min(VALUE_LEN);
+                                r.accept_unprocessed(&out[..n])
+                            } else {
+                                r.accept()
+                            }
+                        } else if let Some(meta) =
+                            gatt.descriptors.iter().copied().find(|d| d.handle == h)
+                        {
+                            if let Some(cb) = cfg.callbacks.on_descriptor_read_value {
+                                let mut out = [0u8; VALUE_LEN];
+                                let n = cb(
+                                    meta.handle,
+                                    meta.chr,
+                                    meta.desc,
+                                    out.as_mut_ptr(),
+                                    out.len(),
+                                    cfg.user,
+                                )
+                                .min(VALUE_LEN);
                                 r.accept_unprocessed(&out[..n])
                             } else {
                                 r.accept()

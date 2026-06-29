@@ -27,6 +27,17 @@ static void on_client_status(uint8_t op, int8_t status, uint16_t handle, void *u
 	ARG_UNUSED(user);
 }
 
+static void on_descriptor_write(uint16_t handle, uint16_t chr, uint8_t desc,
+				const uint8_t *data, size_t len, void *user)
+{
+	ARG_UNUSED(handle);
+	ARG_UNUSED(chr);
+	ARG_UNUSED(desc);
+	ARG_UNUSED(data);
+	ARG_UNUSED(len);
+	ARG_UNUSED(user);
+}
+
 ZTEST_SUITE(runtime_ble_edge, NULL, edge_setup, NULL, NULL, NULL);
 
 ZTEST(runtime_ble_edge, test_init_null_is_rejected)
@@ -237,6 +248,7 @@ ZTEST(runtime_ble_edge, test_gatt_writable_descriptor_config_init)
 
 	cfg.services = services;
 	cfg.num_services = 1;
+	cfg.callbacks.on_descriptor_write = on_descriptor_write;
 	zassert_equal(runtime_ble_init(&cfg), RUNTIME_BLE_OK,
 		      "writable descriptor config init failed");
 	test_load_settled();

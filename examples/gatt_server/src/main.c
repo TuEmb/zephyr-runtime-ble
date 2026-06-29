@@ -106,6 +106,15 @@ static void on_write(uint16_t chr, const uint8_t *data, size_t len, void *user)
 	}
 }
 
+static void on_descriptor_write(uint16_t handle, uint16_t chr, uint8_t desc,
+				const uint8_t *data, size_t len, void *user)
+{
+	ARG_UNUSED(user);
+	ARG_UNUSED(data);
+	printk("[app] descriptor write handle=%u chr=%u desc=%u len=%u\n",
+	       handle, chr, desc, (unsigned int)len);
+}
+
 static void on_subscription(uint16_t chr, uint8_t notify_enabled, uint8_t indicate_enabled,
 			    void *user)
 {
@@ -192,6 +201,7 @@ int main(void)
 			.on_connected = on_connected,
 			.on_disconnected = on_disconnected,
 			.on_write = on_write,
+			.on_descriptor_write = on_descriptor_write,
 			.on_subscription = on_subscription,
 			.on_rssi = on_rssi,
 			.on_att_mtu = on_att_mtu,

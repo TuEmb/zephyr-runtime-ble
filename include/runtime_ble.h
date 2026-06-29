@@ -278,6 +278,15 @@ typedef struct {
 	 * status is RUNTIME_BLE_CLIENT_STATUS_*; handle is the relevant attribute
 	 * handle, or 0 for service/whole-database discovery. */
 	void (*on_client_status)(uint8_t op, int8_t status, uint16_t handle, void *user);
+	/* Peer wrote to a user-defined descriptor. `handle` is the ATT descriptor
+	 * handle, `chr` is the owning flat characteristic index, and `desc` is the
+	 * 0-based descriptor index within that characteristic. */
+	void (*on_descriptor_write)(uint16_t handle, uint16_t chr, uint8_t desc,
+				    const uint8_t *data, size_t len, void *user);
+	/* Peer read a user-defined descriptor. Return bytes written to `out`.
+	 * If NULL, the stored descriptor value is returned. */
+	size_t (*on_descriptor_read_value)(uint16_t handle, uint16_t chr, uint8_t desc,
+					   uint8_t *out, size_t max_len, void *user);
 } runtime_ble_callbacks_t;
 
 /*

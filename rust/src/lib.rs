@@ -187,8 +187,29 @@ pub struct RuntimeBleCallbacks {
     /// L2CAP: channel closed.
     pub on_l2cap_disconnected: Option<extern "C" fn(user: *mut c_void)>,
     /// Central: command completion status.
-    pub on_client_status:
-        Option<extern "C" fn(op: u8, status: i8, handle: u16, user: *mut c_void)>,
+    pub on_client_status: Option<extern "C" fn(op: u8, status: i8, handle: u16, user: *mut c_void)>,
+    /// Peripheral: peer wrote to a user-defined descriptor.
+    pub on_descriptor_write: Option<
+        extern "C" fn(
+            handle: u16,
+            chr: u16,
+            desc: u8,
+            data: *const u8,
+            len: usize,
+            user: *mut c_void,
+        ),
+    >,
+    /// Peripheral: peer read a user-defined descriptor; fill out and return the byte count.
+    pub on_descriptor_read_value: Option<
+        extern "C" fn(
+            handle: u16,
+            chr: u16,
+            desc: u8,
+            out: *mut u8,
+            max_len: usize,
+            user: *mut c_void,
+        ) -> usize,
+    >,
 }
 
 /// C ABI: one read-only descriptor (must match runtime_ble.h).

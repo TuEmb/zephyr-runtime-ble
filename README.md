@@ -158,6 +158,8 @@ legacy advertising channels; zero uses all three channels.
 
 Characteristics are addressed by **flat index** (declaration order). Callbacks:
 `on_connected`, `on_disconnected`, `on_write(chr, …)`, `on_read_value(chr, …)`
+(or `on_descriptor_write(handle, chr, desc, …)` /
+`on_descriptor_read_value(handle, chr, desc, …)` for user-defined descriptors)
 (or `on_data` for the built-in NUS RX), `on_subscription(chr, notify, indicate)`
 when a peer writes a CCCD, `on_conn_params`, `on_phy_update`,
 `on_data_length_update`, `on_att_mtu`, `on_frame_space`, `on_connection_rate`,
@@ -169,6 +171,8 @@ Characteristics may include static descriptors, such as User Description
 session. Descriptors are read-only by default; set
 `RUNTIME_BLE_PERM_WRITE_ALLOWED` or a `RUNTIME_BLE_PERM_WRITE_*` security bit in
 the descriptor permissions to make the runtime keep a writable descriptor value.
+Descriptor callbacks receive the ATT handle plus the owning characteristic index
+and per-characteristic descriptor index.
 
 Use `runtime_ble_indicate()` when a characteristic advertises
 `RUNTIME_BLE_PROP_INDICATE` and the app needs ATT confirmation semantics. The
