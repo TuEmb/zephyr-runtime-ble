@@ -1668,6 +1668,39 @@ fn build_adv_payload(
             return None;
         }
     }
+    if !cfg.adv_service_data_uuid.is_null()
+        && !cfg.adv_service_data.is_null()
+        && cfg.adv_service_data_len > 0
+        && (cfg.adv_service_data_uuid_len == 2 || cfg.adv_service_data_uuid_len == 16)
+    {
+        let uuid_len = cfg.adv_service_data_uuid_len as usize;
+        let data_len = cfg.adv_service_data_len as usize;
+        let total = uuid_len + data_len;
+        let mut service_data = [0u8; 29];
+        if total > service_data.len() {
+            return None;
+        }
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                cfg.adv_service_data_uuid,
+                service_data.as_mut_ptr(),
+                uuid_len,
+            );
+            core::ptr::copy_nonoverlapping(
+                cfg.adv_service_data,
+                service_data.as_mut_ptr().add(uuid_len),
+                data_len,
+            );
+        }
+        let ty = if cfg.adv_service_data_uuid_len == 2 {
+            0x16
+        } else {
+            0x21
+        };
+        if !push_ad(dst, &mut pos, ty, &service_data[..total]) {
+            return None;
+        }
+    }
     if !push_ad(dst, &mut pos, 0x09, name.as_bytes()) {
         let avail = dst.len().saturating_sub(pos);
         if avail < 3 {

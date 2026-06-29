@@ -2,8 +2,8 @@
  * runtime-ble beacon example.
  *
  * Broadcasts legacy non-connectable advertising with a local name, service UUID,
- * and manufacturer payload. Scan with a BLE scanner app; this device will not
- * accept connections.
+ * Service Data, and manufacturer payload. Scan with a BLE scanner app; this
+ * device will not accept connections.
  */
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>
@@ -21,6 +21,10 @@ static const uint8_t mfg_data[] = {
 	0x52, 0x42, 0x02, /* "RB", beacon demo version */
 	0x00, 0x00        /* app-defined payload bytes */
 };
+static const uint8_t svc_data_uuid[2] = { 0xF0, 0xFE };
+static const uint8_t svc_data[] = {
+	0x01, 0x64, 0x2a /* demo frame type, battery %, app sample */
+};
 
 static void on_log(const char *line, void *user)
 {
@@ -37,6 +41,10 @@ int main(void)
 		.manufacturer_data_len = sizeof(mfg_data),
 		.adv_service_uuid = beacon_svc_uuid,
 		.adv_service_uuid_len = sizeof(beacon_svc_uuid),
+		.adv_service_data_uuid = svc_data_uuid,
+		.adv_service_data_uuid_len = sizeof(svc_data_uuid),
+		.adv_service_data = svc_data,
+		.adv_service_data_len = sizeof(svc_data),
 		.nonconnectable = 1,
 		.adv_interval_min_ms = 100,
 		.adv_interval_max_ms = 250,

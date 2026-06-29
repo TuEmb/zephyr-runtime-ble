@@ -196,8 +196,8 @@ typedef struct {
  * Advertising / GAP configuration. Every field is optional — a zeroed struct
  * gives sensible defaults (connectable, general-discoverable, 30-60 ms, name
  * "RUNTIME-BLE", random-static address derived from hwinfo). Pointed-to data
- * (device_name, manufacturer_data, address) must outlive the BLE session — use
- * static storage.
+ * (device_name, manufacturer_data, service data, address) must outlive the BLE
+ * session — use static storage.
  *
  * The GATT layout is user-defined: set `services`/`num_services` to build your
  * own services + characteristics at load time (no Rust rebuild needed). If left
@@ -211,6 +211,10 @@ typedef struct {
 	uint16_t                manufacturer_data_len;
 	const uint8_t          *adv_service_uuid;     /* optional 2- or 16-byte UUID in AD */
 	uint8_t                 adv_service_uuid_len; /* 0, 2, or 16 */
+	const uint8_t          *adv_service_data_uuid;/* optional 2- or 16-byte UUID for Service Data */
+	uint8_t                 adv_service_data_uuid_len; /* 0, 2, or 16 */
+	const uint8_t          *adv_service_data;     /* bytes after service-data UUID; NULL -> none */
+	uint8_t                 adv_service_data_len;
 	const uint8_t          *scan_response_data;   /* raw AD structures, <=31 bytes */
 	uint8_t                 scan_response_data_len;
 	uint8_t                 nonconnectable;       /* 1 -> beacon/broadcast only */

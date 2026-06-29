@@ -171,7 +171,7 @@ pub struct RuntimeBleServiceDef {
 /// Advertising / GAP configuration. All fields are optional: a zeroed struct
 /// gives a sensible default (connectable, general-discoverable, 30-60 ms, name
 /// "RUNTIME-BLE", random-static address from hwinfo). Pointed-to data (name,
-/// manufacturer_data, address) must outlive the session — use static storage.
+/// manufacturer_data, service data, address) must outlive the session — use static storage.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct RuntimeBleConfig {
@@ -183,6 +183,10 @@ pub struct RuntimeBleConfig {
     pub manufacturer_data_len: u16,
     pub adv_service_uuid: *const u8,
     pub adv_service_uuid_len: u8,
+    pub adv_service_data_uuid: *const u8,
+    pub adv_service_data_uuid_len: u8,
+    pub adv_service_data: *const u8,
+    pub adv_service_data_len: u8,
     pub scan_response_data: *const u8,
     pub scan_response_data_len: u8,
     /// 1 = non-connectable advertising/beacon; 0 = connectable GATT server.
@@ -220,6 +224,10 @@ pub(crate) struct RuntimeCfg {
     pub manufacturer_data_len: u16,
     pub adv_service_uuid: *const u8,
     pub adv_service_uuid_len: u8,
+    pub adv_service_data_uuid: *const u8,
+    pub adv_service_data_uuid_len: u8,
+    pub adv_service_data: *const u8,
+    pub adv_service_data_len: u8,
     pub scan_response_data: *const u8,
     pub scan_response_data_len: u8,
     pub nonconnectable: u8,
@@ -328,6 +336,10 @@ pub extern "C" fn runtime_ble_init(cfg: *const RuntimeBleConfig) -> c_int {
             manufacturer_data_len: c.manufacturer_data_len,
             adv_service_uuid: c.adv_service_uuid,
             adv_service_uuid_len: c.adv_service_uuid_len,
+            adv_service_data_uuid: c.adv_service_data_uuid,
+            adv_service_data_uuid_len: c.adv_service_data_uuid_len,
+            adv_service_data: c.adv_service_data,
+            adv_service_data_len: c.adv_service_data_len,
             scan_response_data: c.scan_response_data,
             scan_response_data_len: c.scan_response_data_len,
             nonconnectable: c.nonconnectable,

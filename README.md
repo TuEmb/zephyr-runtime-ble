@@ -110,9 +110,12 @@ static const runtime_ble_char_def_t chrs[] = {
 static const runtime_ble_service_def_t svcs[] = {
     { svc_uuid, 16, chrs, 2 },
 };
+static const uint8_t svc_data_uuid[2] = { 0xF0, 0xFE }, svc_data[] = { 0x01, 0x64 };
 static const runtime_ble_config_t cfg = {
     .device_name = "RUNTIME-BLE", .manufacturer_id = 0xFFFF,
     .adv_service_uuid = svc_uuid, .adv_service_uuid_len = 16,
+    .adv_service_data_uuid = svc_data_uuid, .adv_service_data_uuid_len = 2,
+    .adv_service_data = svc_data, .adv_service_data_len = sizeof(svc_data),
     /* .nonconnectable = 1, for beacon/broadcast-only advertising */
     .adv_interval_min_ms = 30, .adv_interval_max_ms = 60,
     .services = svcs, .num_services = 1,
