@@ -43,6 +43,17 @@ static void on_bond_store(uint8_t index, const uint8_t *blob, size_t len, void *
 	ARG_UNUSED(user);
 }
 
+static uint8_t on_oob_request(uint8_t *local_random, uint8_t *local_confirm, uint8_t *peer_random,
+			      uint8_t *peer_confirm, void *user)
+{
+	ARG_UNUSED(local_random);
+	ARG_UNUSED(local_confirm);
+	ARG_UNUSED(peer_random);
+	ARG_UNUSED(peer_confirm);
+	ARG_UNUSED(user);
+	return 0;
+}
+
 static const runtime_ble_config_t cfg = {
 	.device_name = "RTBLE-TEST",
 	.manufacturer_id = 0xFFFF,
@@ -53,6 +64,7 @@ static const runtime_ble_config_t cfg = {
 		.on_subscription = on_subscription,
 		.on_bond_load = on_bond_load,
 		.on_bond_store = on_bond_store,
+		.on_oob_request = on_oob_request,
 		.on_log = on_log,
 	},
 };

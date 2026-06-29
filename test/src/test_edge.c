@@ -58,6 +58,18 @@ ZTEST(runtime_ble_edge, test_security_argument_validation)
 		      "passkey must be a 6-digit value");
 }
 
+ZTEST(runtime_ble_edge, test_oob_security_config_init)
+{
+	runtime_ble_config_t cfg = *test_base_cfg();
+
+	cfg.security_oob_available = 1;
+	cfg.security_request_on_connect = 1;
+	zassert_equal(runtime_ble_init(&cfg), RUNTIME_BLE_OK, "OOB security config init failed");
+	test_load_settled();
+	zassert_equal(runtime_ble_unload(), RUNTIME_BLE_OK, "cleanup unload failed");
+	zassert_equal(runtime_ble_init(test_base_cfg()), RUNTIME_BLE_OK, "restore base cfg failed");
+}
+
 ZTEST(runtime_ble_edge, test_gatt_permission_flags_init)
 {
 	static const uint8_t svc_uuid[16] = {0x9e, 0xca, 0xdc, 0x24, 0x0e, 0xe5, 0xa9, 0xe0,

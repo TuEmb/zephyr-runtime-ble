@@ -132,7 +132,7 @@ Characteristics are addressed by **flat index** (declaration order). Callbacks:
 (or `on_data` for the built-in NUS RX), `on_subscription(chr, notify, indicate)`
 when a peer writes a CCCD, `on_conn_params`, `on_phy_update`,
 `on_data_length_update`, `on_security_event`, `on_bond_load`, `on_bond_store`,
-`on_log`. They run on the BLE thread — keep them short.
+`on_oob_request`, `on_log`. They run on the BLE thread — keep them short.
 
 Set `runtime_ble_char_def_t.permissions` with `RUNTIME_BLE_PERM_READ_*`,
 `RUNTIME_BLE_PERM_WRITE_*`, or `RUNTIME_BLE_PERM_CCCD_*` to require encrypted or
@@ -142,6 +142,12 @@ For persistent bonding, set `security_bondable = 1` and implement
 `on_bond_load(index, out, max, user)` / `on_bond_store(index, blob, len, user)`.
 Store the opaque `RUNTIME_BLE_BOND_BLOB_MAX` bytes in flash/settings as-is; the
 runtime restores them into the BLE stack on the next `runtime_ble_load()`.
+
+For OOB pairing, set `security_oob_available = 1`. When the Security Manager
+needs OOB data it emits `RUNTIME_BLE_SECURITY_OOB_REQUEST` and calls
+`on_oob_request(local_random, local_confirm, peer_random, peer_confirm, user)`.
+Fill each 16-byte buffer and return non-zero to continue; for legacy OOB put the
+TK in `*_random` and zero `*_confirm`.
 
 ## Roles: peripheral (default) and central
 By default the runtime is a **peripheral** (advertise + GATT server, above). It

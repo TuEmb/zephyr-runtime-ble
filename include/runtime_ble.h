@@ -60,6 +60,7 @@ extern "C" {
 #define RUNTIME_BLE_SECURITY_PAIRING_FAILED   5
 #define RUNTIME_BLE_SECURITY_BOND_LOST        6
 #define RUNTIME_BLE_SECURITY_ENCRYPTED        7
+#define RUNTIME_BLE_SECURITY_OOB_REQUEST      8
 
 /* Security levels reported in security events. */
 #define RUNTIME_BLE_SECURITY_LEVEL_NONE          0
@@ -155,6 +156,12 @@ typedef struct {
 	 * produced; persist blob bytes under the given slot index. */
 	size_t (*on_bond_load)(uint8_t index, uint8_t *out, size_t max_len, void *user);
 	void (*on_bond_store)(uint8_t index, const uint8_t *blob, size_t len, void *user);
+	/* Optional OOB pairing provider. Called when SECURITY_OOB_REQUEST fires.
+	 * Fill 16-byte local_random/local_confirm and peer_random/peer_confirm; return
+	 * non-zero to provide the data to the Security Manager. For legacy OOB, put
+	 * the TK in *_random and zero *_confirm. */
+	uint8_t (*on_oob_request)(uint8_t *local_random, uint8_t *local_confirm,
+				  uint8_t *peer_random, uint8_t *peer_confirm, void *user);
 
 	/* Optional text log line (NUL-terminated) for the app's console. */
 	void (*on_log)(const char *line, void *user);
@@ -215,6 +222,7 @@ typedef struct {
 	 * encryption immediately after a link connects. */
 	uint8_t                 security_bondable;
 	uint8_t                 security_request_on_connect;
+	uint8_t                 security_oob_available;
 	uint8_t                 bond_slot_count;      /* 0 -> RUNTIME_BLE_BOND_SLOTS_DEFAULT */
 
 	runtime_ble_callbacks_t callbacks;

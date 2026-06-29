@@ -37,7 +37,7 @@ use trouble_host::gatt::GattClient;
 #[cfg(feature = "l2cap")]
 use trouble_host::l2cap::{L2capChannel, L2capChannelConfig};
 use trouble_host::prelude::*;
-use trouble_host::{BondInformation, Identity, IdentityResolvingKey, LongTermKey};
+use trouble_host::{BondInformation, Identity, IdentityResolvingKey, LongTermKey, OobData};
 #[cfg(feature = "central")]
 use trouble_host::scan::Scanner;
 
@@ -679,6 +679,41 @@ fn emit_security_event(
     }
 }
 
+fn load_oob_data(cfg: &RuntimeCfg) -> Option<(OobData, OobData)> {
+    emit_security_event(
+        cfg,
+        8,
+        trouble_host::prelude::SecurityLevel::NoEncryption,
+        0,
+        false,
+    );
+    let cb = cfg.callbacks.on_oob_request?;
+    let mut local_random = [0u8; 16];
+    let mut local_confirm = [0u8; 16];
+    let mut peer_random = [0u8; 16];
+    let mut peer_confirm = [0u8; 16];
+    if cb(
+        local_random.as_mut_ptr(),
+        local_confirm.as_mut_ptr(),
+        peer_random.as_mut_ptr(),
+        peer_confirm.as_mut_ptr(),
+        cfg.user,
+    ) == 0
+    {
+        return None;
+    }
+    Some((
+        OobData {
+            random: local_random,
+            confirm: local_confirm,
+        },
+        OobData {
+            random: peer_random,
+            confirm: peer_confirm,
+        },
+    ))
+}
+
 async fn link_control(
     conn: &Connection<'_, DefaultPacketPool>,
     stack: &Stack<'_, nrf_sdc::SoftdeviceController<'static>, DefaultPacketPool>,
@@ -1162,6 +1197,9 @@ async fn run_central_conn(
     if cfg.security_bondable != 0 {
         let _ = conn.set_bondable(true);
     }
+    if cfg.security_oob_available != 0 {
+        let _ = conn.set_oob_available(true);
+    }
     if cfg.security_request_on_connect != 0 {
         let _ = conn.request_security();
     }
@@ -1318,7 +1356,11 @@ async fn central_connection_events(
                     );
                 }
                 ConnectionEvent::OobRequest => {
-                    log_str(cfg, "[security] OOB data requested\0");
+                    if let Some((local, peer)) = load_oob_data(cfg) {
+                        let _ = conn.provide_oob_data(local, peer);
+                    } else {
+                        log_str(cfg, "[security] OOB data requested\0");
+                    }
                 }
                 _ => {}
             },
@@ -1551,6 +1593,9 @@ async fn connection_task(
     if cfg.security_bondable != 0 {
         let _ = conn.set_bondable(true);
     }
+    if cfg.security_oob_available != 0 {
+        let _ = conn.set_oob_available(true);
+    }
     if cfg.security_request_on_connect != 0 {
         let _ = conn.request_security();
     }
@@ -1674,6 +1719,13 @@ async fn connection_task(
                         0,
                         bond.as_ref().is_some_and(|b| b.is_bonded),
                     );
+                }
+                GattConnectionEvent::OobRequest => {
+                    if let Some((local, peer)) = load_oob_data(cfg) {
+                        let _ = gconn.provide_oob_data(local, peer);
+                    } else {
+                        log_str(cfg, "[security] OOB data requested\0");
+                    }
                 }
                 GattConnectionEvent::Gatt { event } => match event {
                     GattEvent::Write(w) => {

@@ -108,6 +108,16 @@ pub struct RuntimeBleCallbacks {
     /// Security: store a persistent bond blob to an application slot.
     pub on_bond_store:
         Option<extern "C" fn(index: u8, blob: *const u8, len: usize, user: *mut c_void)>,
+    /// Security: provide local/peer OOB data when requested during pairing.
+    pub on_oob_request: Option<
+        extern "C" fn(
+            local_random: *mut u8,
+            local_confirm: *mut u8,
+            peer_random: *mut u8,
+            peer_confirm: *mut u8,
+            user: *mut c_void,
+        ) -> u8,
+    >,
     /// Optional NUL-terminated text log line for the app's console.
     pub on_log: Option<extern "C" fn(line: *const c_char, user: *mut c_void)>,
     /// L2CAP: channel established.
@@ -175,6 +185,7 @@ pub struct RuntimeBleConfig {
     pub l2cap_psm: u16,
     pub security_bondable: u8,
     pub security_request_on_connect: u8,
+    pub security_oob_available: u8,
     pub bond_slot_count: u8,
     pub callbacks: RuntimeBleCallbacks,
     pub user: *mut c_void,
@@ -203,6 +214,7 @@ pub(crate) struct RuntimeCfg {
     pub l2cap_psm: u16,
     pub security_bondable: u8,
     pub security_request_on_connect: u8,
+    pub security_oob_available: u8,
     pub bond_slot_count: u8,
     pub callbacks: RuntimeBleCallbacks,
     pub user: *mut c_void,
@@ -304,6 +316,7 @@ pub extern "C" fn runtime_ble_init(cfg: *const RuntimeBleConfig) -> c_int {
             l2cap_psm: c.l2cap_psm,
             security_bondable: c.security_bondable,
             security_request_on_connect: c.security_request_on_connect,
+            security_oob_available: c.security_oob_available,
             bond_slot_count: c.bond_slot_count,
             callbacks: c.callbacks,
             user: c.user,
