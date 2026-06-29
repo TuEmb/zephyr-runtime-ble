@@ -81,6 +81,9 @@ typedef struct {
 	/* Peer wrote to a user-defined characteristic. `chr` is the flat 0-based
 	 * index in declaration order across config.services[].*.chars[]. */
 	void (*on_write)(uint16_t chr, const uint8_t *data, size_t len, void *user);
+	/* Peer read a user-defined characteristic. Return bytes written to `out`.
+	 * If NULL, the stored attribute value is returned. */
+	size_t (*on_read_value)(uint16_t chr, uint8_t *out, size_t max_len, void *user);
 
 	/* ---- Central / GATT client (lib built with the central role) ---- */
 	/* Advertising report from runtime_ble_scan_start(). addr is 6 bytes, LSB first. */

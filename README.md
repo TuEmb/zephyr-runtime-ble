@@ -121,8 +121,9 @@ runtime_ble_notify(1, buf, n);   // notify characteristic #1 (TX)
 runtime_ble_unload();            // tear down, free session RAM
 ```
 Characteristics are addressed by **flat index** (declaration order). Callbacks:
-`on_connected`, `on_disconnected`, `on_write(chr, …)` (or `on_data` for the
-built-in NUS RX), `on_log`. They run on the BLE thread — keep them short.
+`on_connected`, `on_disconnected`, `on_write(chr, …)`, `on_read_value(chr, …)`
+(or `on_data` for the built-in NUS RX), `on_log`. They run on the BLE thread —
+keep them short.
 
 ## Roles: peripheral (default) and central
 By default the runtime is a **peripheral** (advertise + GATT server, above). It

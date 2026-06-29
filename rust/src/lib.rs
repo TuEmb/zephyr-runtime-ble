@@ -71,6 +71,9 @@ pub struct RuntimeBleCallbacks {
     pub on_data: Option<extern "C" fn(data: *const u8, len: usize, user: *mut c_void)>,
     /// Peer wrote to a user-defined characteristic `chr` (flat index).
     pub on_write: Option<extern "C" fn(chr: u16, data: *const u8, len: usize, user: *mut c_void)>,
+    /// Peer read a user-defined characteristic `chr`; fill out and return the byte count.
+    pub on_read_value:
+        Option<extern "C" fn(chr: u16, out: *mut u8, max_len: usize, user: *mut c_void) -> usize>,
     /// Central: a scan advertising report (addr is 6 bytes, LSB first).
     pub on_scan_result:
         Option<extern "C" fn(addr: *const u8, rssi: i8, adv: *const u8, adv_len: usize, user: *mut c_void)>,

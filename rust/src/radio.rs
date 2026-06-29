@@ -250,6 +250,7 @@ fn alloc_store(stores: &mut Vec<*mut [u8; VALUE_LEN]>) -> &'static mut [u8] {
 struct Gatt {
     server: Box<Srv>,
     chars: Vec<Characteristic<[u8; VALUE_LEN]>>,
+    props: Vec<u16>,
     nus_rx: usize,
     nus_tx: usize,
     stores: Vec<*mut [u8; VALUE_LEN]>,
@@ -265,6 +266,7 @@ fn build_gatt(cfg: &RuntimeCfg, name: &'static str) -> Option<Gatt> {
     .ok()?;
 
     let mut chars: Vec<Characteristic<[u8; VALUE_LEN]>> = Vec::new();
+    let mut props: Vec<u16> = Vec::new();
     let mut stores: Vec<*mut [u8; VALUE_LEN]> = Vec::new();
     let (mut nus_rx, mut nus_tx) = (usize::MAX, usize::MAX);
 
@@ -281,6 +283,7 @@ fn build_gatt(cfg: &RuntimeCfg, name: &'static str) -> Option<Gatt> {
             )
             .build(),
         );
+        props.push(C_PROP_WRITE | C_PROP_WRITE_NR);
         nus_tx = chars.len();
         chars.push(
             svc.add_characteristic(
@@ -291,6 +294,7 @@ fn build_gatt(cfg: &RuntimeCfg, name: &'static str) -> Option<Gatt> {
             )
             .build(),
         );
+        props.push(C_PROP_NOTIFY);
     } else {
         let services =
             unsafe { core::slice::from_raw_parts(cfg.services, cfg.num_services as usize) };
@@ -310,6 +314,7 @@ fn build_gatt(cfg: &RuntimeCfg, name: &'static str) -> Option<Gatt> {
                     )
                     .build(),
                 );
+                props.push(c.props);
             }
         }
     }
@@ -317,6 +322,7 @@ fn build_gatt(cfg: &RuntimeCfg, name: &'static str) -> Option<Gatt> {
     Some(Gatt {
         server: Box::new(AttributeServer::new(table)),
         chars,
+        props,
         nus_rx,
         nus_tx,
         stores,
@@ -390,9 +396,10 @@ pub(crate) fn serve_session(
     // Teardown. Drop the server (and the attribute table it owns) and the
     // characteristic handles FIRST, so nothing references the value buffers
     // anymore, THEN reclaim those heap buffers — a load/unload cycle leaks no RAM.
-    let Gatt { server, chars, stores, .. } = gatt;
+    let Gatt { server, chars, props, stores, .. } = gatt;
     drop(server);
     drop(chars);
+    drop(props);
     for ptr in stores {
         // SAFETY: each ptr came from alloc_store (Box::into_raw); the table that
         // held the only `&'static mut` to it has just been dropped.
@@ -971,36 +978,66 @@ async fn connection_task(
                     let _ = req.accept(None, stack).await;
                 }
                 GattConnectionEvent::Gatt { event } => {
-                    // Copy an RX write out + find which characteristic, then accept,
-                    // then dispatch to the app callback.
-                    let mut buf = [0u8; VALUE_LEN];
-                    let mut n = 0usize;
-                    let mut idx = usize::MAX;
-                    if let GattEvent::Write(w) = &event {
-                        let h = w.handle();
-                        for (i, c) in gatt.chars.iter().enumerate() {
-                            if c.handle == h {
-                                idx = i;
-                                break;
+                    match event {
+                        GattEvent::Write(w) => {
+                            let mut buf = [0u8; VALUE_LEN];
+                            let mut n = 0usize;
+                            let mut idx = usize::MAX;
+                            let h = w.handle();
+                            for (i, c) in gatt.chars.iter().enumerate() {
+                                if c.handle == h {
+                                    idx = i;
+                                    break;
+                                }
+                            }
+                            if idx != usize::MAX {
+                                w.with_data(|_off, data| {
+                                    n = data.len().min(VALUE_LEN);
+                                    buf[..n].copy_from_slice(&data[..n]);
+                                });
+                            }
+                            if let Ok(reply) = w.accept() {
+                                let _ = reply.send().await;
+                            }
+                            if idx != usize::MAX {
+                                if idx == gatt.nus_rx {
+                                    if let Some(cb) = cfg.callbacks.on_data {
+                                        cb(buf.as_ptr(), n, cfg.user);
+                                    }
+                                } else if let Some(cb) = cfg.callbacks.on_write {
+                                    cb(idx as u16, buf.as_ptr(), n, cfg.user);
+                                }
                             }
                         }
-                        if idx != usize::MAX {
-                            w.with_data(|_off, data| {
-                                n = data.len().min(VALUE_LEN);
-                                buf[..n].copy_from_slice(&data[..n]);
-                            });
-                        }
-                    }
-                    if let Ok(reply) = event.accept() {
-                        let _ = reply.send().await;
-                    }
-                    if idx != usize::MAX {
-                        if idx == gatt.nus_rx {
-                            if let Some(cb) = cfg.callbacks.on_data {
-                                cb(buf.as_ptr(), n, cfg.user);
+                        GattEvent::Read(r) => {
+                            let mut idx = usize::MAX;
+                            let h = r.handle();
+                            for (i, c) in gatt.chars.iter().enumerate() {
+                                if c.handle == h {
+                                    idx = i;
+                                    break;
+                                }
                             }
-                        } else if let Some(cb) = cfg.callbacks.on_write {
-                            cb(idx as u16, buf.as_ptr(), n, cfg.user);
+                            let reply = if idx != usize::MAX {
+                                if let Some(cb) = cfg.callbacks.on_read_value {
+                                    let mut out = [0u8; VALUE_LEN];
+                                    let n = cb(idx as u16, out.as_mut_ptr(), out.len(), cfg.user)
+                                        .min(VALUE_LEN);
+                                    r.accept_unprocessed(&out[..n])
+                                } else {
+                                    r.accept()
+                                }
+                            } else {
+                                r.accept()
+                            };
+                            if let Ok(reply) = reply {
+                                let _ = reply.send().await;
+                            }
+                        }
+                        other => {
+                            if let Ok(reply) = other.accept() {
+                                let _ = reply.send().await;
+                            }
                         }
                     }
                 }
@@ -1025,7 +1062,12 @@ async fn connection_task(
                 }
                 SEND_REQ.store(false, Ordering::Release);
                 if let Some(c) = gatt.chars.get(target) {
-                    let _ = c.notify_raw(&gconn, &txbuf[..len], false).await;
+                    let props = gatt.props.get(target).copied().unwrap_or(0);
+                    if props & C_PROP_NOTIFY != 0 {
+                        let _ = c.notify_raw(&gconn, &txbuf[..len], false).await;
+                    } else if props & C_PROP_INDICATE != 0 {
+                        let _ = c.indicate_raw(&gconn, &txbuf[..len], false).await;
+                    }
                 }
             }
             Timer::after(Duration::from_millis(10)).await;
