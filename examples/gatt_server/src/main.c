@@ -97,6 +97,12 @@ static void on_rssi(int8_t rssi, void *user)
 	printk("[app] RSSI %d dBm\n", rssi);
 }
 
+static void on_att_mtu(uint16_t att_mtu, void *user)
+{
+	ARG_UNUSED(user);
+	printk("[app] ATT MTU %u\n", att_mtu);
+}
+
 static void on_security_event(uint8_t event, uint8_t level, uint32_t passkey, uint8_t flags,
 			      void *user)
 {
@@ -152,6 +158,7 @@ int main(void)
 			.on_write = on_write,
 			.on_subscription = on_subscription,
 			.on_rssi = on_rssi,
+			.on_att_mtu = on_att_mtu,
 			.on_security_event = on_security_event,
 			.on_bond_load = on_bond_load,
 			.on_bond_store = on_bond_store,

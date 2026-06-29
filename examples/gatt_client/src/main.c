@@ -117,6 +117,11 @@ static void on_read(uint16_t h, const uint8_t *d, size_t n, void *u)
 	ARG_UNUSED(d);
 	printk("[app] READ handle=%u len=%u\n", h, (unsigned int)n);
 }
+static void on_att_mtu(uint16_t att_mtu, void *u)
+{
+	ARG_UNUSED(u);
+	printk("[app] ATT MTU %u\n", att_mtu);
+}
 
 int main(void)
 {
@@ -132,6 +137,7 @@ int main(void)
 			.on_descriptor = on_descriptor,
 			.on_notification = on_notification,
 			.on_read = on_read,
+			.on_att_mtu = on_att_mtu,
 			.on_log = on_log,
 		},
 	};

@@ -62,7 +62,7 @@ use crate::{
 use crate::{L2CAP_SEND_BUF, L2CAP_SEND_LEN, L2CAP_SEND_REQ};
 use crate::{
     LCMD_CONN_PARAMS, LCMD_DLE, LCMD_NONE, LCMD_PASSKEY_CANCEL, LCMD_PASSKEY_CONFIRM,
-    LCMD_PASSKEY_INPUT, LCMD_READ_RSSI, LCMD_SECURITY_REQUEST, LCMD_SET_PHY, LINK_CMD,
+    LCMD_PASSKEY_INPUT, LCMD_READ_ATT_MTU, LCMD_READ_RSSI, LCMD_SECURITY_REQUEST, LCMD_SET_PHY, LINK_CMD,
     LINK_CONN_LATENCY, LINK_CONN_MAX_MS, LINK_CONN_MIN_MS, LINK_CONN_TIMEOUT_MS, LINK_DLE_OCTETS,
     LINK_DLE_TIME_US, LINK_PASSKEY, LINK_PHY,
 };
@@ -977,7 +977,14 @@ async fn link_control_once(
                 }
             }
         }
+        LCMD_READ_ATT_MTU => emit_att_mtu(conn, cfg),
         _ => {}
+    }
+}
+
+fn emit_att_mtu(conn: &Connection<'_, DefaultPacketPool>, cfg: &RuntimeCfg) {
+    if let Some(cb) = cfg.callbacks.on_att_mtu {
+        cb(conn.att_mtu(), cfg.user);
     }
 }
 
@@ -1474,9 +1481,15 @@ async fn central_connection_events(
     cfg: &RuntimeCfg,
     bond_slots: &RefCell<heapless::Vec<(Identity, u8), BOND_SLOT_CAP>>,
 ) {
+    let mtu_report_at = embassy_time::Instant::now() + Duration::from_millis(400);
+    let mut mtu_reported = false;
     loop {
         let tick = async {
             link_control_once(conn, stack, cfg).await;
+            if !mtu_reported && embassy_time::Instant::now() >= mtu_report_at {
+                emit_att_mtu(conn, cfg);
+                mtu_reported = true;
+            }
             Timer::after(Duration::from_millis(20)).await;
         };
         match select(conn.next(), tick).await {
@@ -2206,9 +2219,14 @@ async fn connection_task(
         }
     };
 
+    let att_mtu_report = async {
+        Timer::after(Duration::from_millis(400)).await;
+        emit_att_mtu(conn, cfg);
+    };
+
     select3(
         events,
-        join(tx, link_control(conn, stack, cfg)),
+        join(tx, join(link_control(conn, stack, cfg), att_mtu_report)),
         wait_unload(),
     )
     .await;
