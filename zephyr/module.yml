@@ -2,3 +2,5 @@ name: runtime-ble
 build:
   cmake: .
   kconfig: Kconfig
+  settings:
+    board_root: .
