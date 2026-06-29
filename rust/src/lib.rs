@@ -95,6 +95,10 @@ pub struct RuntimeBleCallbacks {
     /// Link data length changed.
     pub on_data_length_update:
         Option<extern "C" fn(max_tx_octets: u16, max_rx_octets: u16, user: *mut c_void)>,
+    /// Pairing/encryption event.
+    pub on_security_event: Option<
+        extern "C" fn(event: u8, level: u8, passkey: u32, flags: u8, user: *mut c_void),
+    >,
     /// Optional NUL-terminated text log line for the app's console.
     pub on_log: Option<extern "C" fn(line: *const c_char, user: *mut c_void)>,
     /// L2CAP: channel established.
@@ -159,6 +163,8 @@ pub struct RuntimeBleConfig {
     /// Central only: optional 6-byte peer to auto-connect on load (null -> none).
     pub peer_address: *const u8,
     pub l2cap_psm: u16,
+    pub security_bondable: u8,
+    pub security_request_on_connect: u8,
     pub callbacks: RuntimeBleCallbacks,
     pub user: *mut c_void,
 }
@@ -184,6 +190,8 @@ pub(crate) struct RuntimeCfg {
     pub role: u8,
     pub peer_address: *const u8,
     pub l2cap_psm: u16,
+    pub security_bondable: u8,
+    pub security_request_on_connect: u8,
     pub callbacks: RuntimeBleCallbacks,
     pub user: *mut c_void,
 }
@@ -237,6 +245,10 @@ pub(crate) const LCMD_NONE: u32 = 0;
 pub(crate) const LCMD_SET_PHY: u32 = 1;
 pub(crate) const LCMD_DLE: u32 = 2;
 pub(crate) const LCMD_CONN_PARAMS: u32 = 3;
+pub(crate) const LCMD_SECURITY_REQUEST: u32 = 4;
+pub(crate) const LCMD_PASSKEY_CONFIRM: u32 = 5;
+pub(crate) const LCMD_PASSKEY_CANCEL: u32 = 6;
+pub(crate) const LCMD_PASSKEY_INPUT: u32 = 7;
 pub(crate) static LINK_CMD: AtomicU32 = AtomicU32::new(LCMD_NONE);
 pub(crate) static LINK_PHY: AtomicUsize = AtomicUsize::new(0);
 pub(crate) static LINK_DLE_OCTETS: AtomicUsize = AtomicUsize::new(0);
@@ -245,6 +257,7 @@ pub(crate) static LINK_CONN_MIN_MS: AtomicUsize = AtomicUsize::new(0);
 pub(crate) static LINK_CONN_MAX_MS: AtomicUsize = AtomicUsize::new(0);
 pub(crate) static LINK_CONN_LATENCY: AtomicUsize = AtomicUsize::new(0);
 pub(crate) static LINK_CONN_TIMEOUT_MS: AtomicUsize = AtomicUsize::new(0);
+pub(crate) static LINK_PASSKEY: AtomicU32 = AtomicU32::new(0);
 
 const RUNTIME_BLE_OK: c_int = 0;
 const RUNTIME_BLE_ERR_INVALID: c_int = -1;
@@ -277,6 +290,8 @@ pub extern "C" fn runtime_ble_init(cfg: *const RuntimeBleConfig) -> c_int {
             role: c.role,
             peer_address: c.peer_address,
             l2cap_psm: c.l2cap_psm,
+            security_bondable: c.security_bondable,
+            security_request_on_connect: c.security_request_on_connect,
             callbacks: c.callbacks,
             user: c.user,
         });
@@ -357,6 +372,29 @@ pub extern "C" fn runtime_ble_update_conn_params(
     LINK_CONN_LATENCY.store(latency as usize, Ordering::Release);
     LINK_CONN_TIMEOUT_MS.store(timeout_ms as usize, Ordering::Release);
     link_cmd(LCMD_CONN_PARAMS)
+}
+
+#[no_mangle]
+pub extern "C" fn runtime_ble_request_security() -> c_int {
+    link_cmd(LCMD_SECURITY_REQUEST)
+}
+
+#[no_mangle]
+pub extern "C" fn runtime_ble_passkey_confirm(accept: u8) -> c_int {
+    link_cmd(if accept == 0 {
+        LCMD_PASSKEY_CANCEL
+    } else {
+        LCMD_PASSKEY_CONFIRM
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn runtime_ble_passkey_input(passkey: u32) -> c_int {
+    if passkey > 999_999 {
+        return RUNTIME_BLE_ERR_INVALID;
+    }
+    LINK_PASSKEY.store(passkey, Ordering::Release);
+    link_cmd(LCMD_PASSKEY_INPUT)
 }
 
 // ---- Central / GATT client API ----

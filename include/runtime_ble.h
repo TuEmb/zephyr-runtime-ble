@@ -52,6 +52,22 @@ extern "C" {
 #define RUNTIME_BLE_PHY_1M 1
 #define RUNTIME_BLE_PHY_2M 2
 
+/* Security event codes for on_security_event(). */
+#define RUNTIME_BLE_SECURITY_PASSKEY_DISPLAY  1
+#define RUNTIME_BLE_SECURITY_PASSKEY_CONFIRM  2
+#define RUNTIME_BLE_SECURITY_PASSKEY_INPUT    3
+#define RUNTIME_BLE_SECURITY_PAIRING_COMPLETE 4
+#define RUNTIME_BLE_SECURITY_PAIRING_FAILED   5
+#define RUNTIME_BLE_SECURITY_BOND_LOST        6
+#define RUNTIME_BLE_SECURITY_ENCRYPTED        7
+
+/* Security levels reported in security events. */
+#define RUNTIME_BLE_SECURITY_LEVEL_NONE          0
+#define RUNTIME_BLE_SECURITY_LEVEL_ENCRYPTED     1
+#define RUNTIME_BLE_SECURITY_LEVEL_AUTHENTICATED 2
+
+#define RUNTIME_BLE_SECURITY_FLAG_BONDED (1u << 0)
+
 /* ---- Optional user-defined GATT ----
  * Characteristic property bitmask. */
 #define RUNTIME_BLE_PROP_READ        (1u << 0)
@@ -107,6 +123,11 @@ typedef struct {
 	void (*on_phy_update)(uint8_t tx_phy, uint8_t rx_phy, void *user);
 	void (*on_data_length_update)(uint16_t max_tx_octets, uint16_t max_rx_octets,
 				      void *user);
+	/* Pairing/encryption event. `event` is RUNTIME_BLE_SECURITY_*; `level`
+	 * is RUNTIME_BLE_SECURITY_LEVEL_*; `passkey` is valid for PASSKEY_*;
+	 * `flags` currently uses RUNTIME_BLE_SECURITY_FLAG_BONDED. */
+	void (*on_security_event)(uint8_t event, uint8_t level, uint32_t passkey,
+				  uint8_t flags, void *user);
 
 	/* Optional text log line (NUL-terminated) for the app's console. */
 	void (*on_log)(const char *line, void *user);
@@ -162,6 +183,11 @@ typedef struct {
 	 * peripheral listens on it and a central opens it. Needs a l2cap-capable
 	 * lib (CONFIG_RUNTIME_BLE_L2CAP=y). */
 	uint16_t                l2cap_psm;
+	/* Security Manager. `security_bondable` lets pairing produce bond data
+	 * inside the runtime; `security_request_on_connect` requests pairing or
+	 * encryption immediately after a link connects. */
+	uint8_t                 security_bondable;
+	uint8_t                 security_request_on_connect;
 
 	runtime_ble_callbacks_t callbacks;
 	void                   *user;                 /* opaque, passed back to callbacks      */
@@ -199,6 +225,15 @@ int runtime_ble_update_data_length(uint16_t tx_octets, uint16_t tx_time_us);
 /* Request connection parameter update on the active connection. 0 uses defaults. */
 int runtime_ble_update_conn_params(uint16_t min_interval_ms, uint16_t max_interval_ms,
 				   uint16_t latency, uint16_t timeout_ms);
+
+/* Request pairing/encryption on the active link. */
+int runtime_ble_request_security(void);
+
+/* Respond to a PASSKEY_CONFIRM event. accept=1 confirms, 0 cancels. */
+int runtime_ble_passkey_confirm(uint8_t accept);
+
+/* Respond to a PASSKEY_INPUT event. passkey is the 6-digit decimal value. */
+int runtime_ble_passkey_input(uint32_t passkey);
 
 /* The per-device BLE address as 6 bytes, out[0]=LSB. Stable across re-flashes
  * (derived from hwinfo); usable e.g. to build a per-device advertising name. */

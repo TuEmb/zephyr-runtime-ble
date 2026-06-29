@@ -52,6 +52,12 @@ ZTEST(runtime_ble_edge, test_send_argument_validation)
 	zassert_equal(runtime_ble_send(buf, 100000), RUNTIME_BLE_ERR_INVALID, "oversized length");
 }
 
+ZTEST(runtime_ble_edge, test_security_argument_validation)
+{
+	zassert_equal(runtime_ble_passkey_input(1000000), RUNTIME_BLE_ERR_INVALID,
+		      "passkey must be a 6-digit value");
+}
+
 /* With no session/central, the single outstanding-send slot fills after one
  * queued send; a second send reports the queue is full (no crash, no overwrite).
  * A subsequent load() resets the slot and unload() returns the RAM. */

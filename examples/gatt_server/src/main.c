@@ -74,6 +74,17 @@ static void on_write(uint16_t chr, const uint8_t *data, size_t len, void *user)
 	}
 }
 
+static void on_security_event(uint8_t event, uint8_t level, uint32_t passkey, uint8_t flags,
+			      void *user)
+{
+	ARG_UNUSED(user);
+	printk("[app] security event=%u level=%u passkey=%06u flags=0x%02x\n",
+	       event, level, passkey, flags);
+	if (event == RUNTIME_BLE_SECURITY_PASSKEY_CONFIRM) {
+		(void)runtime_ble_passkey_confirm(1);
+	}
+}
+
 int main(void)
 {
 	static const runtime_ble_config_t cfg = {
@@ -91,10 +102,12 @@ int main(void)
 		.address = NULL,   /* hwinfo-derived static-random address */
 		.services = my_services,
 		.num_services = 1,
+		.security_bondable = 1,
 		.callbacks = {
 			.on_connected = on_connected,
 			.on_disconnected = on_disconnected,
 			.on_write = on_write,
+			.on_security_event = on_security_event,
 			.on_log = on_log,
 		},
 		.user = NULL,

@@ -48,9 +48,10 @@ use crate::{
 #[cfg(feature = "l2cap")]
 use crate::{L2CAP_SEND_BUF, L2CAP_SEND_LEN, L2CAP_SEND_REQ};
 use crate::{
-    LCMD_CONN_PARAMS, LCMD_DLE, LCMD_NONE, LCMD_SET_PHY, LINK_CMD, LINK_CONN_LATENCY,
+    LCMD_CONN_PARAMS, LCMD_DLE, LCMD_NONE, LCMD_PASSKEY_CANCEL, LCMD_PASSKEY_CONFIRM,
+    LCMD_PASSKEY_INPUT, LCMD_SECURITY_REQUEST, LCMD_SET_PHY, LINK_CMD, LINK_CONN_LATENCY,
     LINK_CONN_MAX_MS, LINK_CONN_MIN_MS, LINK_CONN_TIMEOUT_MS, LINK_DLE_OCTETS, LINK_DLE_TIME_US,
-    LINK_PHY,
+    LINK_PASSKEY, LINK_PHY,
 };
 
 // Per-chip bring-up. Exactly one chip feature is enabled; `chip::run` is the
@@ -494,6 +495,32 @@ fn phy_to_c(phy: trouble_host::prelude::PhyKind) -> u8 {
     }
 }
 
+fn security_level_to_c(level: trouble_host::prelude::SecurityLevel) -> u8 {
+    match level {
+        trouble_host::prelude::SecurityLevel::EncryptedAuthenticated => 2,
+        trouble_host::prelude::SecurityLevel::Encrypted => 1,
+        trouble_host::prelude::SecurityLevel::NoEncryption => 0,
+    }
+}
+
+fn emit_security_event(
+    cfg: &RuntimeCfg,
+    event: u8,
+    level: trouble_host::prelude::SecurityLevel,
+    passkey: u32,
+    bonded: bool,
+) {
+    if let Some(cb) = cfg.callbacks.on_security_event {
+        cb(
+            event,
+            security_level_to_c(level),
+            passkey,
+            if bonded { 1 } else { 0 },
+            cfg.user,
+        );
+    }
+}
+
 async fn link_control(
     conn: &Connection<'_, DefaultPacketPool>,
     stack: &Stack<'_, nrf_sdc::SoftdeviceController<'static>, DefaultPacketPool>,
@@ -557,6 +584,18 @@ async fn link_control(
                 } else {
                     log_str(cfg, "[link] invalid connection params\0");
                 }
+            }
+            LCMD_SECURITY_REQUEST => {
+                let _ = conn.request_security();
+            }
+            LCMD_PASSKEY_CONFIRM => {
+                let _ = conn.pass_key_confirm();
+            }
+            LCMD_PASSKEY_CANCEL => {
+                let _ = conn.pass_key_cancel();
+            }
+            LCMD_PASSKEY_INPUT => {
+                let _ = conn.pass_key_input(LINK_PASSKEY.load(Ordering::Acquire));
             }
             _ => {}
         }
@@ -951,6 +990,13 @@ async fn run_central_conn(
     conn: &Connection<'_, DefaultPacketPool>,
     cfg: &RuntimeCfg,
 ) {
+    if cfg.security_bondable != 0 {
+        let _ = conn.set_bondable(true);
+    }
+    if cfg.security_request_on_connect != 0 {
+        let _ = conn.request_security();
+    }
+
     #[cfg(feature = "l2cap")]
     {
         if cfg.l2cap_psm != 0 {
@@ -1179,6 +1225,12 @@ async fn connection_task(
         Ok(g) => g,
         Err(_) => return,
     };
+    if cfg.security_bondable != 0 {
+        let _ = conn.set_bondable(true);
+    }
+    if cfg.security_request_on_connect != 0 {
+        let _ = conn.request_security();
+    }
 
     let events = async {
         loop {
@@ -1224,6 +1276,75 @@ async fn connection_task(
                     if let Some(cb) = cfg.callbacks.on_data_length_update {
                         cb(max_tx_octets, max_rx_octets, cfg.user);
                     }
+                }
+                GattConnectionEvent::PassKeyDisplay(key) => {
+                    emit_security_event(
+                        cfg,
+                        1,
+                        trouble_host::prelude::SecurityLevel::NoEncryption,
+                        key.value(),
+                        false,
+                    );
+                }
+                GattConnectionEvent::PassKeyConfirm(key) => {
+                    emit_security_event(
+                        cfg,
+                        2,
+                        trouble_host::prelude::SecurityLevel::NoEncryption,
+                        key.value(),
+                        false,
+                    );
+                }
+                GattConnectionEvent::PassKeyInput => {
+                    emit_security_event(
+                        cfg,
+                        3,
+                        trouble_host::prelude::SecurityLevel::NoEncryption,
+                        0,
+                        false,
+                    );
+                }
+                GattConnectionEvent::PairingComplete {
+                    security_level,
+                    bond,
+                } => {
+                    emit_security_event(
+                        cfg,
+                        4,
+                        security_level,
+                        0,
+                        bond.as_ref().is_some_and(|b| b.is_bonded),
+                    );
+                }
+                GattConnectionEvent::PairingFailed(_) => {
+                    emit_security_event(
+                        cfg,
+                        5,
+                        trouble_host::prelude::SecurityLevel::NoEncryption,
+                        0,
+                        false,
+                    );
+                }
+                GattConnectionEvent::BondLost => {
+                    emit_security_event(
+                        cfg,
+                        6,
+                        trouble_host::prelude::SecurityLevel::NoEncryption,
+                        0,
+                        false,
+                    );
+                }
+                GattConnectionEvent::Encrypted {
+                    security_level,
+                    bond,
+                } => {
+                    emit_security_event(
+                        cfg,
+                        7,
+                        security_level,
+                        0,
+                        bond.as_ref().is_some_and(|b| b.is_bonded),
+                    );
                 }
                 GattConnectionEvent::Gatt { event } => match event {
                     GattEvent::Write(w) => {
