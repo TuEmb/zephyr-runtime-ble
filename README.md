@@ -122,6 +122,7 @@ static const runtime_ble_config_t cfg = {
     /* .directed_peer_address = peer, for directed reconnect advertising */
     .adv_interval_min_ms = 30, .adv_interval_max_ms = 60,
     .adv_channel_map = RUNTIME_BLE_ADV_CH_ALL,           /* 0 also means all */
+    .discoverable = 0,                                   /* 0 general, 1 limited, 2 none */
     .services = svcs, .num_services = 1,
     .callbacks = { .on_write = on_write, .on_connected = on_conn, ... },
 };

@@ -44,7 +44,7 @@ int main(void)
 		.adv_interval_min_ms = 100,
 		.adv_interval_max_ms = 250,
 		.adv_channel_map = RUNTIME_BLE_ADV_CH_ALL,
-		.discoverable = 0,
+		.discoverable = 1, /* limited-discoverable beacon */
 		.callbacks = {
 			.on_log = on_log,
 		},
@@ -62,6 +62,6 @@ int main(void)
 		printk("[app] runtime_ble_load failed\n");
 		return 0;
 	}
-	printk("[app] broadcasting non-connectable beacon \"RTBLE-BEACON\"\n");
+	printk("[app] broadcasting limited-discoverable beacon \"RTBLE-BEACON\"\n");
 	return 0;
 }

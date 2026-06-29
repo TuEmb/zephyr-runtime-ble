@@ -450,6 +450,7 @@ const SCAN_F_SCAN_RESPONSE: u16 = 1 << 3;
 const SCAN_F_LEGACY: u16 = 1 << 4;
 const SCAN_F_DATA_INCOMPLETE: u16 = 1 << 5;
 const SCAN_F_DATA_TRUNCATED: u16 = 1 << 6;
+const LE_LIMITED_DISCOVERABLE: u8 = 0x01;
 
 fn c_addr_kind(kind: u8) -> AddrKind {
     if kind == RTBLE_ADDR_PUBLIC {
@@ -1880,11 +1881,7 @@ fn advertising_parts<'a>(
     cfg: &'a RuntimeCfg,
 ) -> Result<([u8; 31], usize, &'a [u8], AdvertisementParameters), BleHostError<nrf_sdc::Error>> {
     let name = unsafe { cstr_or(cfg.device_name, "RUNTIME-BLE") };
-    let flags = if cfg.discoverable == 2 {
-        BR_EDR_NOT_SUPPORTED
-    } else {
-        LE_GENERAL_DISCOVERABLE | BR_EDR_NOT_SUPPORTED
-    };
+    let flags = discoverability_flags(cfg);
     let man: &[u8] = if !cfg.manufacturer_data.is_null() && cfg.manufacturer_data_len > 0 {
         unsafe {
             core::slice::from_raw_parts(cfg.manufacturer_data, cfg.manufacturer_data_len as usize)
@@ -1906,6 +1903,14 @@ fn advertising_parts<'a>(
     };
     let adv_params = advertising_params(cfg);
     Ok((adv, adv_len, scan_data, adv_params))
+}
+
+fn discoverability_flags(cfg: &RuntimeCfg) -> u8 {
+    match cfg.discoverable {
+        1 => LE_LIMITED_DISCOVERABLE | BR_EDR_NOT_SUPPORTED,
+        2 => BR_EDR_NOT_SUPPORTED,
+        _ => LE_GENERAL_DISCOVERABLE | BR_EDR_NOT_SUPPORTED,
+    }
 }
 
 fn advertising_params(cfg: &RuntimeCfg) -> AdvertisementParameters {
