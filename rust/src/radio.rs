@@ -65,7 +65,7 @@ use crate::{L2CAP_SEND_BUF, L2CAP_SEND_LEN, L2CAP_SEND_REQ};
 use crate::{
     LCMD_CONN_PARAMS, LCMD_CONNECTION_RATE, LCMD_DLE, LCMD_FRAME_SPACE, LCMD_NONE,
     LCMD_PASSKEY_CANCEL, LCMD_PASSKEY_CONFIRM, LCMD_PASSKEY_INPUT, LCMD_READ_ATT_MTU,
-    LCMD_READ_RSSI, LCMD_SECURITY_REQUEST, LCMD_SET_PHY, LINK_CMD, LINK_CONN_LATENCY,
+    LCMD_READ_PHY, LCMD_READ_RSSI, LCMD_SECURITY_REQUEST, LCMD_SET_PHY, LINK_CMD, LINK_CONN_LATENCY,
     LINK_CONN_MAX_MS, LINK_CONN_MIN_MS, LINK_CONN_TIMEOUT_MS, LINK_DLE_OCTETS,
     LINK_DLE_TIME_US, LINK_FRAME_SPACE_MAX_US, LINK_FRAME_SPACE_MIN_US,
     LINK_FRAME_SPACE_PHY_MASK, LINK_FRAME_SPACE_TYPES, LINK_PASSKEY, LINK_PHY,
@@ -1097,6 +1097,13 @@ async fn link_control_once(
             }
         }
         LCMD_READ_ATT_MTU => emit_att_mtu(conn, cfg),
+        LCMD_READ_PHY => {
+            if let Ok((tx_phy, rx_phy)) = conn.read_phy(stack).await {
+                if let Some(cb) = cfg.callbacks.on_phy_update {
+                    cb(phy_to_c(tx_phy), phy_to_c(rx_phy), cfg.user);
+                }
+            }
+        }
         _ => {}
     }
 }

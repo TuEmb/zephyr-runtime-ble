@@ -45,6 +45,7 @@ static void on_connected(void *u)
 	ARG_UNUSED(u);
 	connected = 1;
 	printk("[app] connected\n");
+	(void)runtime_ble_read_phy();
 	(void)runtime_ble_update_frame_space(0, 0, RUNTIME_BLE_PHY_MASK_1M,
 					     RUNTIME_BLE_FRAME_SPACE_ACL_CP |
 					     RUNTIME_BLE_FRAME_SPACE_ACL_PC);

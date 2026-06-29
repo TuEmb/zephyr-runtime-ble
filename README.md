@@ -134,6 +134,7 @@ runtime_ble_set_phy(RUNTIME_BLE_PHY_2M);       // or RUNTIME_BLE_PHY_CODED
 runtime_ble_update_data_length(251, 2120);
 runtime_ble_update_conn_params(30, 60, 0, 4000);
 runtime_ble_read_att_mtu();      // -> on_att_mtu(att_mtu)
+runtime_ble_read_phy();          // -> on_phy_update(tx, rx)
 runtime_ble_request_security();  // pairing/encryption; events -> on_security_event
 runtime_ble_unload();            // tear down, free session RAM
 ```

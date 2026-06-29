@@ -368,6 +368,9 @@ int runtime_ble_read_rssi(void);
 /* Read the negotiated ATT MTU on the active connection; result arrives via on_att_mtu. */
 int runtime_ble_read_att_mtu(void);
 
+/* Read the current link PHY on the active connection; result arrives via on_phy_update. */
+int runtime_ble_read_phy(void);
+
 /* Request pairing/encryption on the active link. */
 int runtime_ble_request_security(void);
 

@@ -376,6 +376,7 @@ pub(crate) const LCMD_READ_RSSI: u32 = 8;
 pub(crate) const LCMD_READ_ATT_MTU: u32 = 9;
 pub(crate) const LCMD_FRAME_SPACE: u32 = 10;
 pub(crate) const LCMD_CONNECTION_RATE: u32 = 11;
+pub(crate) const LCMD_READ_PHY: u32 = 12;
 pub(crate) static LINK_CMD: AtomicU32 = AtomicU32::new(LCMD_NONE);
 pub(crate) static LINK_PHY: AtomicUsize = AtomicUsize::new(0);
 pub(crate) static LINK_DLE_OCTETS: AtomicUsize = AtomicUsize::new(0);
@@ -571,6 +572,11 @@ pub extern "C" fn runtime_ble_read_rssi() -> c_int {
 #[no_mangle]
 pub extern "C" fn runtime_ble_read_att_mtu() -> c_int {
     link_cmd(LCMD_READ_ATT_MTU)
+}
+
+#[no_mangle]
+pub extern "C" fn runtime_ble_read_phy() -> c_int {
+    link_cmd(LCMD_READ_PHY)
 }
 
 #[no_mangle]
