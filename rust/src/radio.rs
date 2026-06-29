@@ -17,9 +17,7 @@ use core::sync::atomic::Ordering;
 use core::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 
 use embassy_futures::join::join;
-use embassy_futures::select::select;
-#[cfg(any(feature = "central", feature = "l2cap"))]
-use embassy_futures::select::select3;
+use embassy_futures::select::{select, select3};
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_time::{Duration, Timer};
 use embassy_time_driver::Driver;
@@ -959,71 +957,80 @@ async fn connection_task(
         Err(_) => return,
     };
 
-    loop {
-        match gconn.next().await {
-            GattConnectionEvent::Disconnected { reason } => {
-                use core::fmt::Write;
-                let mut s: heapless::String<48> = heapless::String::new();
-                let _ = write!(s, "[link] disconnected reason=0x{:02x}\0", reason.into_inner());
-                log_str(cfg, &s);
-                break;
-            }
-            GattConnectionEvent::RequestConnectionParams(req) => {
-                let _ = req.accept(None, stack).await;
-            }
-            GattConnectionEvent::Gatt { event } => {
-                // Copy an RX write out + find which characteristic, then accept,
-                // then dispatch to the app callback.
-                let mut buf = [0u8; VALUE_LEN];
-                let mut n = 0usize;
-                let mut idx = usize::MAX;
-                if let GattEvent::Write(w) = &event {
-                    let h = w.handle();
-                    for (i, c) in gatt.chars.iter().enumerate() {
-                        if c.handle == h {
-                            idx = i;
-                            break;
+    let events = async {
+        loop {
+            match gconn.next().await {
+                GattConnectionEvent::Disconnected { reason } => {
+                    use core::fmt::Write;
+                    let mut s: heapless::String<48> = heapless::String::new();
+                    let _ = write!(s, "[link] disconnected reason=0x{:02x}\0", reason.into_inner());
+                    log_str(cfg, &s);
+                    break;
+                }
+                GattConnectionEvent::RequestConnectionParams(req) => {
+                    let _ = req.accept(None, stack).await;
+                }
+                GattConnectionEvent::Gatt { event } => {
+                    // Copy an RX write out + find which characteristic, then accept,
+                    // then dispatch to the app callback.
+                    let mut buf = [0u8; VALUE_LEN];
+                    let mut n = 0usize;
+                    let mut idx = usize::MAX;
+                    if let GattEvent::Write(w) = &event {
+                        let h = w.handle();
+                        for (i, c) in gatt.chars.iter().enumerate() {
+                            if c.handle == h {
+                                idx = i;
+                                break;
+                            }
                         }
+                        if idx != usize::MAX {
+                            w.with_data(|_off, data| {
+                                n = data.len().min(VALUE_LEN);
+                                buf[..n].copy_from_slice(&data[..n]);
+                            });
+                        }
+                    }
+                    if let Ok(reply) = event.accept() {
+                        let _ = reply.send().await;
                     }
                     if idx != usize::MAX {
-                        w.with_data(|_off, data| {
-                            n = data.len().min(VALUE_LEN);
-                            buf[..n].copy_from_slice(&data[..n]);
-                        });
-                    }
-                }
-                if let Ok(reply) = event.accept() {
-                    let _ = reply.send().await;
-                }
-                if idx != usize::MAX {
-                    if idx == gatt.nus_rx {
-                        if let Some(cb) = cfg.callbacks.on_data {
-                            cb(buf.as_ptr(), n, cfg.user);
+                        if idx == gatt.nus_rx {
+                            if let Some(cb) = cfg.callbacks.on_data {
+                                cb(buf.as_ptr(), n, cfg.user);
+                            }
+                        } else if let Some(cb) = cfg.callbacks.on_write {
+                            cb(idx as u16, buf.as_ptr(), n, cfg.user);
                         }
-                    } else if let Some(cb) = cfg.callbacks.on_write {
-                        cb(idx as u16, buf.as_ptr(), n, cfg.user);
                     }
                 }
-                // Flush a queued TX (runtime_ble_send/notify) as one notify.
-                if SEND_REQ.load(Ordering::Acquire) {
-                    let chr = SEND_CHR.load(Ordering::Acquire);
-                    let target = if chr == NUS_TX_CHR { gatt.nus_tx } else { chr };
-                    let len = SEND_LEN.load(Ordering::Acquire).min(VALUE_LEN).min(SEND_BUF_CAP);
-                    let mut txbuf = [0u8; VALUE_LEN];
-                    unsafe {
-                        core::ptr::copy_nonoverlapping(
-                            core::ptr::addr_of!(SEND_BUF) as *const u8,
-                            txbuf.as_mut_ptr(),
-                            len,
-                        );
-                    }
-                    SEND_REQ.store(false, Ordering::Release);
-                    if let Some(c) = gatt.chars.get(target) {
-                        let _ = c.notify_raw(&gconn, &txbuf[..len], false).await;
-                    }
+                _ => {}
+            }
+        }
+    };
+
+    let tx = async {
+        loop {
+            if SEND_REQ.load(Ordering::Acquire) {
+                let chr = SEND_CHR.load(Ordering::Acquire);
+                let target = if chr == NUS_TX_CHR { gatt.nus_tx } else { chr };
+                let len = SEND_LEN.load(Ordering::Acquire).min(VALUE_LEN).min(SEND_BUF_CAP);
+                let mut txbuf = [0u8; VALUE_LEN];
+                unsafe {
+                    core::ptr::copy_nonoverlapping(
+                        core::ptr::addr_of!(SEND_BUF) as *const u8,
+                        txbuf.as_mut_ptr(),
+                        len,
+                    );
+                }
+                SEND_REQ.store(false, Ordering::Release);
+                if let Some(c) = gatt.chars.get(target) {
+                    let _ = c.notify_raw(&gconn, &txbuf[..len], false).await;
                 }
             }
-            _ => {}
+            Timer::after(Duration::from_millis(10)).await;
         }
-    }
+    };
+
+    select3(events, tx, wait_unload()).await;
 }
