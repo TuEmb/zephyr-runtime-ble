@@ -58,7 +58,7 @@ use crate::{
     LCMD_CONN_PARAMS, LCMD_DLE, LCMD_NONE, LCMD_PASSKEY_CANCEL, LCMD_PASSKEY_CONFIRM,
     LCMD_PASSKEY_INPUT, LCMD_SECURITY_REQUEST, LCMD_SET_PHY, LINK_CMD, LINK_CONN_LATENCY,
     LINK_CONN_MAX_MS, LINK_CONN_MIN_MS, LINK_CONN_TIMEOUT_MS, LINK_DLE_OCTETS, LINK_DLE_TIME_US,
-    LINK_PASSKEY, LINK_PHY,
+    LINK_PASSKEY, LINK_PHY, LCMD_READ_RSSI,
 };
 
 // Per-chip bring-up. Exactly one chip feature is enabled; `chip::run` is the
@@ -863,6 +863,13 @@ async fn link_control_once(
         }
         LCMD_PASSKEY_INPUT => {
             let _ = conn.pass_key_input(LINK_PASSKEY.load(Ordering::Acquire));
+        }
+        LCMD_READ_RSSI => {
+            if let Ok(rssi) = conn.rssi(stack).await {
+                if let Some(cb) = cfg.callbacks.on_rssi {
+                    cb(rssi, cfg.user);
+                }
+            }
         }
         _ => {}
     }

@@ -152,6 +152,8 @@ typedef struct {
 	void (*on_phy_update)(uint8_t tx_phy, uint8_t rx_phy, void *user);
 	void (*on_data_length_update)(uint16_t max_tx_octets, uint16_t max_rx_octets,
 				      void *user);
+	/* Result of runtime_ble_read_rssi() on the active link. */
+	void (*on_rssi)(int8_t rssi, void *user);
 	/* Pairing/encryption event. `event` is RUNTIME_BLE_SECURITY_*; `level`
 	 * is RUNTIME_BLE_SECURITY_LEVEL_*; `passkey` is valid for PASSKEY_*;
 	 * `flags` currently uses RUNTIME_BLE_SECURITY_FLAG_BONDED. */
@@ -275,6 +277,9 @@ int runtime_ble_update_data_length(uint16_t tx_octets, uint16_t tx_time_us);
 /* Request connection parameter update on the active connection. 0 uses defaults. */
 int runtime_ble_update_conn_params(uint16_t min_interval_ms, uint16_t max_interval_ms,
 				   uint16_t latency, uint16_t timeout_ms);
+
+/* Read RSSI on the active connection; result arrives via on_rssi. */
+int runtime_ble_read_rssi(void);
 
 /* Request pairing/encryption on the active link. */
 int runtime_ble_request_security(void);

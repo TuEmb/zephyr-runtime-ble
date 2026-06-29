@@ -61,6 +61,7 @@ static void on_connected(void *user)
 {
 	ARG_UNUSED(user);
 	printk("[app] central connected\n");
+	(void)runtime_ble_read_rssi();
 }
 
 static void on_disconnected(uint8_t reason, void *user)
@@ -84,6 +85,11 @@ static void on_subscription(uint16_t chr, uint8_t notify_enabled, uint8_t indica
 	ARG_UNUSED(user);
 	printk("[app] subscription chr=%u notify=%u indicate=%u\n",
 	       chr, notify_enabled, indicate_enabled);
+}
+static void on_rssi(int8_t rssi, void *user)
+{
+	ARG_UNUSED(user);
+	printk("[app] RSSI %d dBm\n", rssi);
 }
 
 static void on_security_event(uint8_t event, uint8_t level, uint32_t passkey, uint8_t flags,
@@ -143,6 +149,7 @@ int main(void)
 			.on_disconnected = on_disconnected,
 			.on_write = on_write,
 			.on_subscription = on_subscription,
+			.on_rssi = on_rssi,
 			.on_security_event = on_security_event,
 			.on_bond_load = on_bond_load,
 			.on_bond_store = on_bond_store,
