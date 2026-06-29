@@ -246,6 +246,9 @@ typedef struct {
 	uint8_t                 discoverable;         /* 0 general (default), 1 limited, 2 none */
 	const uint8_t          *address;              /* optional 6-byte static-random addr;   */
 	                                              /* NULL -> hwinfo-derived                */
+	const uint8_t          *directed_peer_address;/* optional 6-byte peer for directed adv */
+	uint8_t                 directed_peer_address_kind; /* RUNTIME_BLE_ADDR_* */
+	uint8_t                 directed_high_duty;   /* 1 -> high-duty directed advertising */
 	/* User-defined GATT. NULL/0 -> built-in NUS. Otherwise built at load time;
 	 * use on_write + runtime_ble_notify() with the flat characteristic index.
 	 * The array + its uuid buffers must outlive the BLE session (static). */

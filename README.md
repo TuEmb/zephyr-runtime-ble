@@ -119,6 +119,7 @@ static const runtime_ble_config_t cfg = {
     .appearance = 0x0540, .adv_appearance = 1,          /* Generic sensor */
     .adv_tx_power_dbm = 0, .adv_tx_power_present = 1,   /* AD type 0x0a + controller hint */
     /* .nonconnectable = 1, for beacon/broadcast-only advertising */
+    /* .directed_peer_address = peer, for directed reconnect advertising */
     .adv_interval_min_ms = 30, .adv_interval_max_ms = 60,
     .services = svcs, .num_services = 1,
     .callbacks = { .on_write = on_write, .on_connected = on_conn, ... },
@@ -135,6 +136,9 @@ runtime_ble_unload();            // tear down, free session RAM
 ```
 For fully custom beacons, set `adv_data`/`adv_data_len` to raw AD structures
 (up to 31 bytes); when present it bypasses the automatic advertising builder.
+For fast reconnect to a known central, set `directed_peer_address`,
+`directed_peer_address_kind`, and optionally `directed_high_duty`; directed
+legacy advertising is connectable, non-scannable, and carries no AD payload.
 
 Characteristics are addressed by **flat index** (declaration order). Callbacks:
 `on_connected`, `on_disconnected`, `on_write(chr, …)`, `on_read_value(chr, …)`

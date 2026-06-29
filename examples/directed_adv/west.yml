@@ -1,0 +1,22 @@
+# Build for any supported board:
+#   west init -l directed_adv
+#   west update
+#   west build -b <board> directed_adv
+manifest:
+  remotes:
+    - name: zephyrproject-rtos
+      url-base: https://github.com/zephyrproject-rtos
+  projects:
+    - name: zephyr
+      remote: zephyrproject-rtos
+      revision: main
+      import:
+        name-allowlist:
+          - cmsis
+          - hal_nordic
+          - mbedtls
+          - mcuboot
+          - nrfxlib
+  self:
+    path: directed_adv
+

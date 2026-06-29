@@ -1630,6 +1630,17 @@ async fn advertise_connectable<'a>(
     peripheral: &mut Peripheral<'a, nrf_sdc::SoftdeviceController<'static>, DefaultPacketPool>,
     cfg: &RuntimeCfg,
 ) -> Result<Connection<'a, DefaultPacketPool>, BleHostError<nrf_sdc::Error>> {
+    if let Some(peer) = directed_peer(cfg) {
+        let adv_params = advertising_params(cfg);
+        let advertisement = if cfg.directed_high_duty != 0 {
+            Advertisement::ConnectableNonscannableDirectedHighDuty { peer }
+        } else {
+            Advertisement::ConnectableNonscannableDirected { peer }
+        };
+        let advertiser = peripheral.advertise(&adv_params, advertisement).await?;
+        return Ok(advertiser.accept().await?);
+    }
+
     let (adv, adv_len, scan_data, adv_params) = advertising_parts(cfg)?;
     let advertiser = peripheral
         .advertise(
@@ -1701,6 +1712,11 @@ fn advertising_parts<'a>(
     } else {
         &[]
     };
+    let adv_params = advertising_params(cfg);
+    Ok((adv, adv_len, scan_data, adv_params))
+}
+
+fn advertising_params(cfg: &RuntimeCfg) -> AdvertisementParameters {
     let min_ms = if cfg.adv_interval_min_ms == 0 {
         30
     } else {
@@ -1711,13 +1727,23 @@ fn advertising_parts<'a>(
     } else {
         cfg.adv_interval_max_ms
     } as u64;
-    let adv_params = AdvertisementParameters {
+    AdvertisementParameters {
         interval_min: Duration::from_millis(min_ms),
         interval_max: Duration::from_millis(max_ms),
         tx_power: adv_tx_power(cfg),
         ..Default::default()
-    };
-    Ok((adv, adv_len, scan_data, adv_params))
+    }
+}
+
+fn directed_peer(cfg: &RuntimeCfg) -> Option<Address> {
+    if cfg.directed_peer_address.is_null() {
+        return None;
+    }
+    let mut addr = [0u8; 6];
+    unsafe {
+        core::ptr::copy_nonoverlapping(cfg.directed_peer_address, addr.as_mut_ptr(), 6);
+    }
+    Some(peer_address(addr, cfg.directed_peer_address_kind))
 }
 
 fn advertising_payload(

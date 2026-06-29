@@ -220,6 +220,10 @@ pub struct RuntimeBleConfig {
     pub discoverable: u8,
     /// Optional custom 6-byte static-random address; null -> hwinfo-derived.
     pub address: *const u8,
+    /// Peripheral only: optional directed advertising peer address.
+    pub directed_peer_address: *const u8,
+    pub directed_peer_address_kind: u8,
+    pub directed_high_duty: u8,
     /// User-defined GATT (null/0 -> built-in NUS). Built at load time.
     pub services: *const RuntimeBleServiceDef,
     pub num_services: u8,
@@ -263,6 +267,9 @@ pub(crate) struct RuntimeCfg {
     pub adv_interval_max_ms: u16,
     pub discoverable: u8,
     pub address: *const u8,
+    pub directed_peer_address: *const u8,
+    pub directed_peer_address_kind: u8,
+    pub directed_high_duty: u8,
     pub services: *const RuntimeBleServiceDef,
     pub num_services: u8,
     pub role: u8,
@@ -381,6 +388,9 @@ pub extern "C" fn runtime_ble_init(cfg: *const RuntimeBleConfig) -> c_int {
             adv_interval_max_ms: c.adv_interval_max_ms,
             discoverable: c.discoverable,
             address: c.address,
+            directed_peer_address: c.directed_peer_address,
+            directed_peer_address_kind: c.directed_peer_address_kind,
+            directed_high_duty: c.directed_high_duty,
             services: c.services,
             num_services: c.num_services,
             role: c.role,
