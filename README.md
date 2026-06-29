@@ -116,6 +116,8 @@ static const runtime_ble_config_t cfg = {
     .adv_service_uuid = svc_uuid, .adv_service_uuid_len = 16,
     .adv_service_data_uuid = svc_data_uuid, .adv_service_data_uuid_len = 2,
     .adv_service_data = svc_data, .adv_service_data_len = sizeof(svc_data),
+    .appearance = 0x0540, .adv_appearance = 1,          /* Generic sensor */
+    .adv_tx_power_dbm = 0, .adv_tx_power_present = 1,   /* AD type 0x0a + controller hint */
     /* .nonconnectable = 1, for beacon/broadcast-only advertising */
     .adv_interval_min_ms = 30, .adv_interval_max_ms = 60,
     .services = svcs, .num_services = 1,

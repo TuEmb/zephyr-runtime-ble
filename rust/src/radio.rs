@@ -17,6 +17,7 @@ use core::sync::atomic::Ordering;
 use core::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 
 use bt_hci::param::{AddrKind, BdAddr};
+use bt_hci::uuid::BluetoothUuid16;
 use embassy_futures::join::join;
 #[cfg(feature = "central")]
 use embassy_futures::select::Either;
@@ -39,6 +40,7 @@ use trouble_host::l2cap::{L2capChannel, L2capChannelConfig};
 use trouble_host::prelude::*;
 #[cfg(feature = "central")]
 use trouble_host::scan::Scanner;
+use trouble_host::advertise::TxPower;
 use trouble_host::{BondInformation, Identity, IdentityResolvingKey, LongTermKey, OobData};
 
 use crate::{
@@ -286,17 +288,27 @@ struct Gatt {
     nus_rx: usize,
     nus_tx: usize,
     stores: Vec<*mut [u8; VALUE_LEN]>,
+    appearance_store: Option<*mut BluetoothUuid16>,
     bond_slots: RefCell<heapless::Vec<(Identity, u8), BOND_SLOT_CAP>>,
 }
 
 fn build_gatt(cfg: &RuntimeCfg, name: &'static str) -> Option<Gatt> {
     let mut table: AttributeTable<'static, NoopRawMutex, ATT_MAX> = AttributeTable::new();
-    GapConfig::Peripheral(PeripheralConfig {
+    let (gap_appearance, appearance_store) = gap_appearance(cfg.appearance);
+    if GapConfig::Peripheral(PeripheralConfig {
         name,
-        appearance: &appearance::power_device::GENERIC_POWER_DEVICE,
+        appearance: gap_appearance,
     })
     .build(&mut table)
-    .ok()?;
+    .is_err()
+    {
+        if let Some(ptr) = appearance_store {
+            unsafe {
+                let _ = Box::from_raw(ptr);
+            }
+        }
+        return None;
+    }
 
     let mut chars: Vec<Characteristic<[u8; VALUE_LEN]>> = Vec::new();
     let mut props: Vec<u16> = Vec::new();
@@ -374,8 +386,19 @@ fn build_gatt(cfg: &RuntimeCfg, name: &'static str) -> Option<Gatt> {
         nus_rx,
         nus_tx,
         stores,
+        appearance_store,
         bond_slots: RefCell::new(heapless::Vec::new()),
     })
+}
+
+fn gap_appearance(value: u16) -> (&'static BluetoothUuid16, Option<*mut BluetoothUuid16>) {
+    if value == 0 {
+        return (&appearance::power_device::GENERIC_POWER_DEVICE, None);
+    }
+    let ptr = Box::into_raw(Box::new(BluetoothUuid16::new(value)));
+    // SAFETY: ptr is kept alive in Gatt.appearance_store and reclaimed only
+    // after the attribute server/table has been dropped.
+    (unsafe { &*ptr }, Some(ptr))
 }
 
 pub(crate) fn log(cfg: &RuntimeCfg, msg: &core::ffi::CStr) {
@@ -484,6 +507,7 @@ pub(crate) fn serve_session(
         props,
         bond_slots,
         stores,
+        appearance_store,
         ..
     } = gatt;
     drop(server);
@@ -493,6 +517,11 @@ pub(crate) fn serve_session(
     for ptr in stores {
         // SAFETY: each ptr came from alloc_store (Box::into_raw); the table that
         // held the only `&'static mut` to it has just been dropped.
+        unsafe {
+            let _ = Box::from_raw(ptr);
+        }
+    }
+    if let Some(ptr) = appearance_store {
         unsafe {
             let _ = Box::from_raw(ptr);
         }
@@ -1613,9 +1642,38 @@ fn advertising_parts<'a>(
     let adv_params = AdvertisementParameters {
         interval_min: Duration::from_millis(min_ms),
         interval_max: Duration::from_millis(max_ms),
+        tx_power: adv_tx_power(cfg),
         ..Default::default()
     };
     Ok((adv, adv_len, scan_data, adv_params))
+}
+
+fn adv_tx_power(cfg: &RuntimeCfg) -> TxPower {
+    if cfg.adv_tx_power_present == 0 {
+        return TxPower::ZerodBm;
+    }
+    match cfg.adv_tx_power_dbm {
+        -40 => TxPower::Minus40dBm,
+        -20 => TxPower::Minus20dBm,
+        -16 => TxPower::Minus16dBm,
+        -12 => TxPower::Minus12dBm,
+        -8 => TxPower::Minus8dBm,
+        -4 => TxPower::Minus4dBm,
+        2 => TxPower::Plus2dBm,
+        3 => TxPower::Plus3dBm,
+        4 => TxPower::Plus4dBm,
+        5 => TxPower::Plus5dBm,
+        6 => TxPower::Plus6dBm,
+        7 => TxPower::Plus7dBm,
+        8 => TxPower::Plus8dBm,
+        10 => TxPower::Plus10dBm,
+        12 => TxPower::Plus12dBm,
+        14 => TxPower::Plus14dBm,
+        16 => TxPower::Plus16dBm,
+        18 => TxPower::Plus18dBm,
+        20 => TxPower::Plus20dBm,
+        _ => TxPower::ZerodBm,
+    }
 }
 
 fn push_ad(dst: &mut [u8; 31], pos: &mut usize, ty: u8, data: &[u8]) -> bool {
@@ -1700,6 +1758,21 @@ fn build_adv_payload(
         if !push_ad(dst, &mut pos, ty, &service_data[..total]) {
             return None;
         }
+    }
+    if cfg.adv_appearance != 0 {
+        let appearance = if cfg.appearance == 0 {
+            u16::from(appearance::power_device::GENERIC_POWER_DEVICE)
+        } else {
+            cfg.appearance
+        };
+        if !push_ad(dst, &mut pos, 0x19, &appearance.to_le_bytes()) {
+            return None;
+        }
+    }
+    if cfg.adv_tx_power_present != 0
+        && !push_ad(dst, &mut pos, 0x0a, &[cfg.adv_tx_power_dbm as u8])
+    {
+        return None;
     }
     if !push_ad(dst, &mut pos, 0x09, name.as_bytes()) {
         let avail = dst.len().saturating_sub(pos);

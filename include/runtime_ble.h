@@ -215,6 +215,10 @@ typedef struct {
 	uint8_t                 adv_service_data_uuid_len; /* 0, 2, or 16 */
 	const uint8_t          *adv_service_data;     /* bytes after service-data UUID; NULL -> none */
 	uint8_t                 adv_service_data_len;
+	uint16_t                appearance;           /* GAP Appearance; 0 -> default generic power device */
+	uint8_t                 adv_appearance;       /* 1 -> include Appearance AD (type 0x19) */
+	int8_t                  adv_tx_power_dbm;     /* TX Power Level value; used when present=1 */
+	uint8_t                 adv_tx_power_present; /* 1 -> set adv tx power + include AD type 0x0a */
 	const uint8_t          *scan_response_data;   /* raw AD structures, <=31 bytes */
 	uint8_t                 scan_response_data_len;
 	uint8_t                 nonconnectable;       /* 1 -> beacon/broadcast only */

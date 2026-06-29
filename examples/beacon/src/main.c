@@ -1,23 +1,17 @@
 /*
  * runtime-ble beacon example.
  *
- * Broadcasts legacy non-connectable advertising with a local name, service UUID,
- * Service Data, and manufacturer payload. Scan with a BLE scanner app; this
- * device will not accept connections.
+ * Broadcasts legacy non-connectable advertising with a local name, Service Data,
+ * Appearance, TX Power Level, and manufacturer payload in scan response. Scan
+ * with a BLE scanner app; this device will not accept connections.
  */
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>
 #include "runtime_ble.h"
 
-/* Demo 128-bit service UUID, little-endian byte order:
- * e54c00b0-b5a3-f393-e0a9-e50e24dcca9e
- */
-static const uint8_t beacon_svc_uuid[16] = {
-	0x9e, 0xca, 0xdc, 0x24, 0x0e, 0xe5, 0xa9, 0xe0,
-	0x93, 0xf3, 0xa3, 0xb5, 0xb0, 0x00, 0x4c, 0xe5
-};
-
 static const uint8_t mfg_data[] = {
+	0x08, 0xff,       /* 7 bytes of manufacturer-specific data follow */
+	0xff, 0xff,       /* demo company ID, little-endian */
 	0x52, 0x42, 0x02, /* "RB", beacon demo version */
 	0x00, 0x00        /* app-defined payload bytes */
 };
@@ -36,15 +30,16 @@ int main(void)
 {
 	static const runtime_ble_config_t cfg = {
 		.device_name = "RTBLE-BEACON",
-		.manufacturer_id = 0xFFFF,
-		.manufacturer_data = mfg_data,
-		.manufacturer_data_len = sizeof(mfg_data),
-		.adv_service_uuid = beacon_svc_uuid,
-		.adv_service_uuid_len = sizeof(beacon_svc_uuid),
 		.adv_service_data_uuid = svc_data_uuid,
 		.adv_service_data_uuid_len = sizeof(svc_data_uuid),
 		.adv_service_data = svc_data,
 		.adv_service_data_len = sizeof(svc_data),
+		.appearance = 0x0540, /* Generic sensor */
+		.adv_appearance = 1,
+		.adv_tx_power_dbm = 0,
+		.adv_tx_power_present = 1,
+		.scan_response_data = mfg_data,
+		.scan_response_data_len = sizeof(mfg_data),
 		.nonconnectable = 1,
 		.adv_interval_min_ms = 100,
 		.adv_interval_max_ms = 250,
