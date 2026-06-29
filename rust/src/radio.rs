@@ -31,6 +31,8 @@ use trouble_host::prelude::*;
 use trouble_host::connection::{ConnectConfig, ScanConfig};
 #[cfg(feature = "central")]
 use trouble_host::gatt::GattClient;
+#[cfg(feature = "central")]
+use trouble_host::scan::Scanner;
 #[cfg(feature = "l2cap")]
 use trouble_host::l2cap::{L2capChannel, L2capChannelConfig};
 
@@ -40,8 +42,10 @@ use crate::{
 };
 #[cfg(feature = "central")]
 use crate::{
-    CCMD_CONNECT, CCMD_DISCONNECT, CCMD_DISCOVER, CCMD_NONE, CCMD_READ, CCMD_SUBSCRIBE, CCMD_WRITE,
-    CENTRAL_ADDR, CENTRAL_CMD, CENTRAL_HANDLE, CENTRAL_UUID, CENTRAL_UUID_LEN,
+    CCMD_CONNECT, CCMD_DISCONNECT, CCMD_DISCOVER, CCMD_NONE, CCMD_READ, CCMD_SCAN_START,
+    CCMD_SCAN_STOP, CCMD_SUBSCRIBE, CCMD_WRITE, CENTRAL_ADDR, CENTRAL_CMD, CENTRAL_HANDLE,
+    CENTRAL_UUID, CENTRAL_UUID_LEN, SCAN_ACTIVE, SCAN_INTERVAL_MS, SCAN_TIMEOUT_MS,
+    SCAN_WINDOW_MS,
 };
 #[cfg(feature = "l2cap")]
 use crate::{L2CAP_SEND_BUF, L2CAP_SEND_LEN, L2CAP_SEND_REQ};
@@ -370,7 +374,7 @@ pub(crate) fn serve_session(
     let mut peripheral = stack.peripheral();
     let runner = stack.runner();
     let ble_main = async {
-        let work = join(run_runner(runner), serve(&mut peripheral, &gatt, server, stack, cfg));
+        let work = join(run_runner(runner, cfg), serve(&mut peripheral, &gatt, server, stack, cfg));
         // Dual GAP role (RUNTIME_BLE_ROLE_DUAL): also run the central side
         // (connect + GATT client) so the device is a server (this advertise/serve
         // loop) AND a client at the same time, on two simultaneous links.
@@ -400,8 +404,45 @@ pub(crate) fn serve_session(
     }
 }
 
-async fn run_runner<C: Controller, P: PacketPool>(mut runner: Runner<'_, C, P>) {
-    let _ = runner.run().await;
+struct RtEventHandler<'a> {
+    cfg: &'a RuntimeCfg,
+}
+
+impl trouble_host::prelude::EventHandler for RtEventHandler<'_> {
+    fn on_adv_reports(&self, reports: trouble_host::prelude::LeAdvReportsIter) {
+        for report in reports {
+            let Ok(report) = report else { continue };
+            if let Some(cb) = self.cfg.callbacks.on_scan_result {
+                cb(
+                    report.addr.raw().as_ptr(),
+                    report.rssi,
+                    report.data.as_ptr(),
+                    report.data.len(),
+                    self.cfg.user,
+                );
+            }
+        }
+    }
+
+    fn on_ext_adv_reports(&self, reports: trouble_host::prelude::LeExtAdvReportsIter) {
+        for report in reports {
+            let Ok(report) = report else { continue };
+            if let Some(cb) = self.cfg.callbacks.on_scan_result {
+                cb(
+                    report.addr.raw().as_ptr(),
+                    report.rssi,
+                    report.data.as_ptr(),
+                    report.data.len(),
+                    self.cfg.user,
+                );
+            }
+        }
+    }
+}
+
+async fn run_runner<C: Controller, P: PacketPool>(mut runner: Runner<'_, C, P>, cfg: &RuntimeCfg) {
+    let handler = RtEventHandler { cfg };
+    let _ = runner.run_with_handler(&handler).await;
 }
 
 /// Run a peripheral connection: the GATT server, plus (when l2cap is enabled
@@ -507,6 +548,12 @@ async fn l2cap_serve(
 #[cfg(feature = "central")]
 type ClientP<'a> = GattClient<'a, nrf_sdc::SoftdeviceController<'static>, DefaultPacketPool, 4>;
 
+#[cfg(feature = "central")]
+enum IdleCmd {
+    Connect([u8; 6]),
+    ScanStart,
+}
+
 /// One central session: connect (by config.peer_address or a queued connect
 /// command), run a GATT client until disconnect/unload, repeat.
 #[cfg(feature = "central")]
@@ -520,7 +567,7 @@ pub(crate) fn serve_central(
     let runner = stack.runner();
     block_on(select(
         mpsl.run(),
-        select(run_runner(runner), central_loop(stack, cfg)),
+        select(run_runner(runner, cfg), central_loop(stack, cfg)),
     ));
 }
 
@@ -542,8 +589,17 @@ async fn central_loop(
             unsafe { core::ptr::copy_nonoverlapping(cfg.peer_address, a.as_mut_ptr(), 6) };
             a
         } else {
-            match wait_connect_cmd().await {
-                Some(a) => a,
+            match wait_idle_cmd().await {
+                Some(IdleCmd::Connect(a)) => a,
+                Some(IdleCmd::ScanStart) => {
+                    let mut scanner = Scanner::new(central);
+                    let connect_after_scan = run_scan(&mut scanner, cfg).await;
+                    central = scanner.into_inner();
+                    match connect_after_scan {
+                        Some(a) => a,
+                        None => continue,
+                    }
+                }
                 None => return, // unloaded
             }
         };
@@ -575,29 +631,90 @@ async fn central_loop(
     }
 }
 
-/// Park (polling) until a CCMD_CONNECT is queued; returns its target address.
+/// Park (polling) until an idle central command is queued.
 #[cfg(feature = "central")]
-async fn wait_connect_cmd() -> Option<[u8; 6]> {
+async fn wait_idle_cmd() -> Option<IdleCmd> {
     loop {
         if UNLOAD_REQ.load(Ordering::Acquire) {
             return None;
         }
-        let cmd = CENTRAL_CMD.load(Ordering::Acquire);
-        if cmd == CCMD_CONNECT {
-            CENTRAL_CMD.store(CCMD_NONE, Ordering::Release);
-            let mut a = [0u8; 6];
-            unsafe {
-                core::ptr::copy_nonoverlapping(
-                    core::ptr::addr_of!(CENTRAL_ADDR) as *const u8,
-                    a.as_mut_ptr(),
-                    6,
-                );
+        match CENTRAL_CMD.swap(CCMD_NONE, Ordering::AcqRel) {
+            CCMD_CONNECT => {
+                let mut a = [0u8; 6];
+                unsafe {
+                    core::ptr::copy_nonoverlapping(
+                        core::ptr::addr_of!(CENTRAL_ADDR) as *const u8,
+                        a.as_mut_ptr(),
+                        6,
+                    );
+                }
+                return Some(IdleCmd::Connect(a));
             }
-            return Some(a);
+            CCMD_SCAN_START => return Some(IdleCmd::ScanStart),
+            CCMD_NONE | CCMD_SCAN_STOP => {}
+            _ => {
+                // Drop commands that need an active link while idle.
+            }
         }
-        if cmd != CCMD_NONE {
-            // Drop commands that need an active link while idle.
-            CENTRAL_CMD.store(CCMD_NONE, Ordering::Release);
+        Timer::after(Duration::from_millis(30)).await;
+    }
+}
+
+#[cfg(feature = "central")]
+async fn run_scan(
+    scanner: &mut Scanner<'_, nrf_sdc::SoftdeviceController<'static>, DefaultPacketPool>,
+    cfg: &RuntimeCfg,
+) -> Option<[u8; 6]> {
+    let interval_ms = SCAN_INTERVAL_MS.load(Ordering::Acquire);
+    let window_ms = SCAN_WINDOW_MS.load(Ordering::Acquire);
+    let timeout_ms = SCAN_TIMEOUT_MS.load(Ordering::Acquire);
+    let scan_config = ScanConfig {
+        active: SCAN_ACTIVE.load(Ordering::Acquire),
+        interval: Duration::from_millis(if interval_ms == 0 { 100 } else { interval_ms as u64 }),
+        window: Duration::from_millis(if window_ms == 0 { 50 } else { window_ms as u64 }),
+        timeout: Duration::from_millis(timeout_ms as u64),
+        ..Default::default()
+    };
+    log_str(cfg, "[central] scanning\0");
+    let _session = match scanner.scan(&scan_config).await {
+        Ok(s) => s,
+        Err(_) => {
+            log_str(cfg, "[central] scan failed\0");
+            return None;
+        }
+    };
+
+    let stop_at = if timeout_ms == 0 {
+        None
+    } else {
+        Some(embassy_time::Instant::now() + Duration::from_millis(timeout_ms as u64))
+    };
+    loop {
+        if UNLOAD_REQ.load(Ordering::Acquire) {
+            return None;
+        }
+        if stop_at.is_some_and(|at| embassy_time::Instant::now() >= at) {
+            log_str(cfg, "[central] scan timeout\0");
+            return None;
+        }
+        match CENTRAL_CMD.swap(CCMD_NONE, Ordering::AcqRel) {
+            CCMD_SCAN_STOP => {
+                log_str(cfg, "[central] scan stopped\0");
+                return None;
+            }
+            CCMD_CONNECT => {
+                let mut a = [0u8; 6];
+                unsafe {
+                    core::ptr::copy_nonoverlapping(
+                        core::ptr::addr_of!(CENTRAL_ADDR) as *const u8,
+                        a.as_mut_ptr(),
+                        6,
+                    );
+                }
+                return Some(a);
+            }
+            CCMD_SCAN_START | CCMD_NONE => {}
+            _ => {}
         }
         Timer::after(Duration::from_millis(30)).await;
     }

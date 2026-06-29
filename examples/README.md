@@ -8,7 +8,7 @@ and `boards/<board>.conf` overlays apply any board-specific tweaks.
 | Example | Feature | Lib variant needed |
 |---|---|---|
 | [`gatt_server/`](gatt_server/) | Peripheral + user-defined GATT (echo) | `libruntime_ble.a` (default) |
-| [`gatt_client/`](gatt_client/) | Central: scan/connect + discover/read/write/subscribe | `libruntime_ble_central.a` (`CONFIG_RUNTIME_BLE_CENTRAL=y`) |
+| [`gatt_client/`](gatt_client/) | Central: active/passive scan, connect + discover/read/write/subscribe | `libruntime_ble_central.a` (`CONFIG_RUNTIME_BLE_CENTRAL=y`) |
 | [`l2cap_peripheral/`](l2cap_peripheral/) | L2CAP CoC echo server | `libruntime_ble_l2cap.a` (`CONFIG_RUNTIME_BLE_L2CAP=y`) |
 | [`l2cap_central/`](l2cap_central/) | Central that opens an L2CAP channel | `libruntime_ble_central_l2cap.a` (both) |
 | [`dual/`](dual/) | **Server + client at once** (advertise/serve AND connect/query) | `libruntime_ble_central.a` (`CONFIG_RUNTIME_BLE_CENTRAL=y`) |

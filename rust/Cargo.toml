@@ -11,7 +11,7 @@ crate-type = ["staticlib"]
 [dependencies]
 # trouble BLE host (no_std). Fork with caller-owned GATT value storage (a
 # rebuildable server without StaticCell), same revision proven on nRF54L15.
-trouble-host = { git = "https://github.com/TuEmb/trouble.git", rev = "d03f2f537f2741b21154b7cae65c0ec89c01063c", features = ["derive", "gatt", "security"] }
+trouble-host = { git = "https://github.com/TuEmb/trouble.git", rev = "d03f2f537f2741b21154b7cae65c0ec89c01063c", features = ["derive", "gatt", "scan", "security"] }
 # generic-queue: our custom block_on isn't the embassy executor, so the timer
 # queue must be the standalone (generic) variant, not the integrated one.
 embassy-time = { version = "0.5", features = ["tick-hz-1_000", "generic-queue-8"] }

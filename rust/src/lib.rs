@@ -181,6 +181,8 @@ pub(crate) const NUS_TX_CHR: usize = usize::MAX;
 
 // ---- Central command channel (single outstanding; consumed by the central loop) ----
 pub(crate) const CCMD_NONE: u32 = 0;
+pub(crate) const CCMD_SCAN_START: u32 = 1;
+pub(crate) const CCMD_SCAN_STOP: u32 = 2;
 pub(crate) const CCMD_CONNECT: u32 = 3;
 pub(crate) const CCMD_DISCONNECT: u32 = 4;
 pub(crate) const CCMD_DISCOVER: u32 = 5;
@@ -195,6 +197,10 @@ pub(crate) static mut CENTRAL_ADDR: [u8; 6] = [0; 6];
 /// Service UUID (LE) + length for CCMD_DISCOVER.
 pub(crate) static mut CENTRAL_UUID: [u8; 16] = [0; 16];
 pub(crate) static CENTRAL_UUID_LEN: AtomicUsize = AtomicUsize::new(0);
+pub(crate) static SCAN_ACTIVE: AtomicBool = AtomicBool::new(false);
+pub(crate) static SCAN_INTERVAL_MS: AtomicUsize = AtomicUsize::new(0);
+pub(crate) static SCAN_WINDOW_MS: AtomicUsize = AtomicUsize::new(0);
+pub(crate) static SCAN_TIMEOUT_MS: AtomicUsize = AtomicUsize::new(0);
 // CCMD_WRITE payload reuses SEND_BUF / SEND_LEN (a session is one role only).
 
 // ---- L2CAP outbound SDU (single outstanding; consumed by the l2cap send pump) ----
@@ -293,6 +299,33 @@ fn central_cmd(cmd: u32, handle: u32) -> c_int {
         let _ = (cmd, handle);
         RUNTIME_BLE_ERR_INVALID
     }
+}
+
+#[no_mangle]
+pub extern "C" fn runtime_ble_scan_start(
+    active: u8,
+    interval_ms: u16,
+    window_ms: u16,
+    timeout_ms: u16,
+) -> c_int {
+    #[cfg(feature = "central")]
+    {
+        SCAN_ACTIVE.store(active != 0, Ordering::Release);
+        SCAN_INTERVAL_MS.store(interval_ms as usize, Ordering::Release);
+        SCAN_WINDOW_MS.store(window_ms as usize, Ordering::Release);
+        SCAN_TIMEOUT_MS.store(timeout_ms as usize, Ordering::Release);
+        central_cmd(CCMD_SCAN_START, 0)
+    }
+    #[cfg(not(feature = "central"))]
+    {
+        let _ = (active, interval_ms, window_ms, timeout_ms);
+        RUNTIME_BLE_ERR_INVALID
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn runtime_ble_scan_stop() -> c_int {
+    central_cmd(CCMD_SCAN_STOP, 0)
 }
 
 #[no_mangle]

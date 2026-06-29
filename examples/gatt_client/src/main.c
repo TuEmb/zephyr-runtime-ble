@@ -1,9 +1,9 @@
 /*
  * runtime-ble central / GATT-client example.
  *
- * Connects to a peer (config.role = CENTRAL, config.peer_address), discovers a
- * vendor service, subscribes to its notify characteristic, writes to its write
- * characteristic, and prints the notification the peer sends back.
+ * Scans briefly, connects to a peer (config.role = CENTRAL + runtime_ble_connect),
+ * discovers a vendor service, subscribes to its notify characteristic, writes to
+ * its write characteristic, and prints the notification the peer sends back.
  *
  * Pair it with the peripheral echo example (examples/gatt_server): set PEER_*
  * below to that board's BLE address (printed in its boot log).
@@ -33,6 +33,7 @@ static const uint8_t peer[6] = {PEER0, PEER1, PEER2, PEER3, PEER4, PEER5};
 static volatile uint16_t rx_handle, tx_handle;
 static volatile int discovered;
 static volatile int connected;
+static volatile int scan_printed;
 
 static void on_log(const char *l, void *u)
 {
@@ -50,6 +51,18 @@ static void on_disconnected(uint8_t r, void *u)
 	ARG_UNUSED(u);
 	connected = 0;
 	printk("[app] disconnected (reason 0x%02x)\n", r);
+}
+static void on_scan_result(const uint8_t *addr, int8_t rssi, const uint8_t *adv, size_t adv_len,
+			   void *u)
+{
+	ARG_UNUSED(u);
+	ARG_UNUSED(adv);
+	if (scan_printed < 8) {
+		printk("[scan] %02x:%02x:%02x:%02x:%02x:%02x rssi=%d adv_len=%u\n",
+		       addr[5], addr[4], addr[3], addr[2], addr[1], addr[0],
+		       rssi, (unsigned int)adv_len);
+		scan_printed++;
+	}
 }
 static void on_discovered(uint16_t h, const uint8_t *uuid, uint8_t ul, uint16_t props, void *u)
 {
@@ -86,10 +99,10 @@ int main(void)
 	static const runtime_ble_config_t cfg = {
 		.device_name = "RTBLE-CENTRAL",
 		.role = RUNTIME_BLE_ROLE_CENTRAL,
-		.peer_address = peer,
 		.callbacks = {
 			.on_connected = on_connected,
 			.on_disconnected = on_disconnected,
+			.on_scan_result = on_scan_result,
 			.on_discovered = on_discovered,
 			.on_notification = on_notification,
 			.on_read = on_read,
@@ -106,6 +119,14 @@ int main(void)
 		return 0;
 	}
 
+	printk("[app] active scan for 2 seconds...\n");
+	runtime_ble_scan_start(1, 100, 50, 2000);
+	k_sleep(K_MSEC(2300));
+	runtime_ble_scan_stop();
+
+	printk("[app] connecting to %02x:%02x:%02x:%02x:%02x:%02x\n",
+	       peer[5], peer[4], peer[3], peer[2], peer[1], peer[0]);
+	runtime_ble_connect(peer);
 	while (!connected) {
 		k_sleep(K_MSEC(100));
 	}

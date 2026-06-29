@@ -130,6 +130,8 @@ can also be a **central / GATT client** — build the central-capable lib
 (`CONFIG_RUNTIME_BLE_CENTRAL=y`, links `libruntime_ble_central.a`) and set
 `config.role = RUNTIME_BLE_ROLE_CENTRAL`:
 ```c
+runtime_ble_scan_start(1, 100, 50, 0);  // active scan; results -> on_scan_result
+runtime_ble_scan_stop();
 runtime_ble_connect(addr);              // or config.peer_address to auto-connect
 runtime_ble_client_discover(svc, 16);   // -> on_discovered(handle, …)
 runtime_ble_client_subscribe(handle);   // -> on_notification(handle, …)

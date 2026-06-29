@@ -83,8 +83,7 @@ typedef struct {
 	void (*on_write)(uint16_t chr, const uint8_t *data, size_t len, void *user);
 
 	/* ---- Central / GATT client (lib built with the central role) ---- */
-	/* RESERVED for a future active-scan API (not yet emitted). For now connect
-	 * by address (config.peer_address / runtime_ble_connect). */
+	/* Advertising report from runtime_ble_scan_start(). addr is 6 bytes, LSB first. */
 	void (*on_scan_result)(const uint8_t *addr, int8_t rssi,
 			       const uint8_t *adv, size_t adv_len, void *user);
 	/* A characteristic found by runtime_ble_client_discover() (uuid is LE). */
@@ -182,8 +181,16 @@ void runtime_ble_addr(uint8_t out[6]);
  * these return RUNTIME_BLE_ERR_INVALID). Calls are queued to the runtime thread;
  * results arrive via the callbacks above. One central link at a time.
  *
- * Discovery is by address (config.peer_address or runtime_ble_connect); active
- * scanning (on_scan_result) is a planned addition and is not emitted yet. */
+ * Discovery can be by active/passive scan (on_scan_result), then connect by
+ * address (runtime_ble_connect or config.peer_address). */
+
+/* Start scanning. active=1 sends scan requests; active=0 is passive. interval/window
+ * are milliseconds (0 -> 100/50 ms). timeout_ms=0 scans until stop/connect/unload. */
+int runtime_ble_scan_start(uint8_t active, uint16_t interval_ms, uint16_t window_ms,
+			   uint16_t timeout_ms);
+
+/* Stop an active scan. Idempotent. */
+int runtime_ble_scan_stop(void);
 
 /* Connect to a peer by address (6 bytes, LSB first). on_connected fires on success. */
 int runtime_ble_connect(const uint8_t addr[6]);
