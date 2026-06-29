@@ -19,6 +19,8 @@ use core::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 use bt_hci::param::{AddrKind, BdAddr};
 use embassy_futures::join::join;
 use embassy_futures::select::{select, select3};
+#[cfg(feature = "central")]
+use embassy_futures::select::Either;
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_time::{Duration, Timer};
 use embassy_time_driver::Driver;
@@ -434,7 +436,7 @@ pub(crate) fn serve_session(
         // loop) AND a client at the same time, on two simultaneous links.
         #[cfg(feature = "central")]
         if cfg.role == 2 {
-            select3(work, central_loop(stack, cfg), wait_unload()).await;
+            select3(work, central_loop(stack, cfg, &gatt.bond_slots), wait_unload()).await;
         } else {
             select(work, wait_unload()).await;
         }
@@ -683,79 +685,86 @@ async fn link_control(
     cfg: &RuntimeCfg,
 ) {
     loop {
-        match LINK_CMD.swap(LCMD_NONE, Ordering::AcqRel) {
-            LCMD_SET_PHY => {
-                let phy = if LINK_PHY.load(Ordering::Acquire) == 2 {
-                    trouble_host::prelude::PhyKind::Le2M
-                } else {
-                    trouble_host::prelude::PhyKind::Le1M
-                };
-                let _ = conn.set_phy(stack, phy).await;
-            }
-            LCMD_DLE => {
-                let octets = LINK_DLE_OCTETS.load(Ordering::Acquire);
-                let time_us = LINK_DLE_TIME_US.load(Ordering::Acquire);
-                let octets = if octets == 0 {
-                    251
-                } else {
-                    octets.min(u16::MAX as usize)
-                };
-                let time_us = if time_us == 0 {
-                    2120
-                } else {
-                    time_us.min(u16::MAX as usize)
-                };
-                let _ = conn
-                    .update_data_length(stack, octets as u16, time_us as u16)
-                    .await;
-            }
-            LCMD_CONN_PARAMS => {
-                let min_ms = LINK_CONN_MIN_MS.load(Ordering::Acquire);
-                let max_ms = LINK_CONN_MAX_MS.load(Ordering::Acquire);
-                let timeout_ms = LINK_CONN_TIMEOUT_MS.load(Ordering::Acquire);
-                let params = RequestedConnParams {
-                    min_connection_interval: Duration::from_millis(if min_ms == 0 {
-                        80
-                    } else {
-                        min_ms as u64
-                    }),
-                    max_connection_interval: Duration::from_millis(if max_ms == 0 {
-                        80
-                    } else {
-                        max_ms as u64
-                    }),
-                    max_latency: LINK_CONN_LATENCY
-                        .load(Ordering::Acquire)
-                        .min(u16::MAX as usize) as u16,
-                    min_event_length: Duration::from_secs(0),
-                    max_event_length: Duration::from_secs(0),
-                    supervision_timeout: Duration::from_millis(if timeout_ms == 0 {
-                        8000
-                    } else {
-                        timeout_ms as u64
-                    }),
-                };
-                if params.is_valid() {
-                    let _ = conn.update_connection_params(stack, &params).await;
-                } else {
-                    log_str(cfg, "[link] invalid connection params\0");
-                }
-            }
-            LCMD_SECURITY_REQUEST => {
-                let _ = conn.request_security();
-            }
-            LCMD_PASSKEY_CONFIRM => {
-                let _ = conn.pass_key_confirm();
-            }
-            LCMD_PASSKEY_CANCEL => {
-                let _ = conn.pass_key_cancel();
-            }
-            LCMD_PASSKEY_INPUT => {
-                let _ = conn.pass_key_input(LINK_PASSKEY.load(Ordering::Acquire));
-            }
-            _ => {}
-        }
+        link_control_once(conn, stack, cfg).await;
         Timer::after(Duration::from_millis(20)).await;
+    }
+}
+
+async fn link_control_once(
+    conn: &Connection<'_, DefaultPacketPool>,
+    stack: &Stack<'_, nrf_sdc::SoftdeviceController<'static>, DefaultPacketPool>,
+    cfg: &RuntimeCfg,
+) {
+    match LINK_CMD.swap(LCMD_NONE, Ordering::AcqRel) {
+        LCMD_SET_PHY => {
+            let phy = if LINK_PHY.load(Ordering::Acquire) == 2 {
+                trouble_host::prelude::PhyKind::Le2M
+            } else {
+                trouble_host::prelude::PhyKind::Le1M
+            };
+            let _ = conn.set_phy(stack, phy).await;
+        }
+        LCMD_DLE => {
+            let octets = LINK_DLE_OCTETS.load(Ordering::Acquire);
+            let time_us = LINK_DLE_TIME_US.load(Ordering::Acquire);
+            let octets = if octets == 0 {
+                251
+            } else {
+                octets.min(u16::MAX as usize)
+            };
+            let time_us = if time_us == 0 {
+                2120
+            } else {
+                time_us.min(u16::MAX as usize)
+            };
+            let _ = conn
+                .update_data_length(stack, octets as u16, time_us as u16)
+                .await;
+        }
+        LCMD_CONN_PARAMS => {
+            let min_ms = LINK_CONN_MIN_MS.load(Ordering::Acquire);
+            let max_ms = LINK_CONN_MAX_MS.load(Ordering::Acquire);
+            let timeout_ms = LINK_CONN_TIMEOUT_MS.load(Ordering::Acquire);
+            let params = RequestedConnParams {
+                min_connection_interval: Duration::from_millis(if min_ms == 0 {
+                    80
+                } else {
+                    min_ms as u64
+                }),
+                max_connection_interval: Duration::from_millis(if max_ms == 0 {
+                    80
+                } else {
+                    max_ms as u64
+                }),
+                max_latency: LINK_CONN_LATENCY.load(Ordering::Acquire).min(u16::MAX as usize)
+                    as u16,
+                min_event_length: Duration::from_secs(0),
+                max_event_length: Duration::from_secs(0),
+                supervision_timeout: Duration::from_millis(if timeout_ms == 0 {
+                    8000
+                } else {
+                    timeout_ms as u64
+                }),
+            };
+            if params.is_valid() {
+                let _ = conn.update_connection_params(stack, &params).await;
+            } else {
+                log_str(cfg, "[link] invalid connection params\0");
+            }
+        }
+        LCMD_SECURITY_REQUEST => {
+            let _ = conn.request_security();
+        }
+        LCMD_PASSKEY_CONFIRM => {
+            let _ = conn.pass_key_confirm();
+        }
+        LCMD_PASSKEY_CANCEL => {
+            let _ = conn.pass_key_cancel();
+        }
+        LCMD_PASSKEY_INPUT => {
+            let _ = conn.pass_key_input(LINK_PASSKEY.load(Ordering::Acquire));
+        }
+        _ => {}
     }
 }
 
@@ -860,7 +869,7 @@ pub(crate) fn serve_central(
     let runner = stack.runner();
     block_on(select(
         mpsl.run(),
-        select(run_runner(runner, cfg), central_loop(stack, cfg)),
+        select(run_runner(runner, cfg), central_loop(stack, cfg, &bond_slots)),
     ));
 }
 
@@ -868,6 +877,7 @@ pub(crate) fn serve_central(
 async fn central_loop(
     stack: &Stack<'_, nrf_sdc::SoftdeviceController<'static>, DefaultPacketPool>,
     cfg: &RuntimeCfg,
+    bond_slots: &RefCell<heapless::Vec<(Identity, u8), BOND_SLOT_CAP>>,
 ) {
     let mut central = stack.central();
     let mut auto = !cfg.peer_address.is_null();
@@ -911,7 +921,7 @@ async fn central_loop(
                 if let Some(cb) = cfg.callbacks.on_connected {
                     cb(cfg.user);
                 }
-                run_central_conn(stack, &conn, cfg).await;
+                run_central_conn(stack, &conn, cfg, bond_slots).await;
                 if let Some(cb) = cfg.callbacks.on_disconnected {
                     cb(0, cfg.user);
                 }
@@ -1147,6 +1157,7 @@ async fn run_central_conn(
     stack: &Stack<'_, nrf_sdc::SoftdeviceController<'static>, DefaultPacketPool>,
     conn: &Connection<'_, DefaultPacketPool>,
     cfg: &RuntimeCfg,
+    bond_slots: &RefCell<heapless::Vec<(Identity, u8), BOND_SLOT_CAP>>,
 ) {
     if cfg.security_bondable != 0 {
         let _ = conn.set_bondable(true);
@@ -1161,7 +1172,7 @@ async fn run_central_conn(
             select3(
                 client_session(stack, conn, cfg),
                 l2cap_central(stack, conn, cfg),
-                link_control(conn, stack, cfg),
+                central_connection_events(conn, stack, cfg, bond_slots),
             )
             .await;
             return;
@@ -1169,10 +1180,151 @@ async fn run_central_conn(
     }
     select3(
         client_session(stack, conn, cfg),
-        link_control(conn, stack, cfg),
+        central_connection_events(conn, stack, cfg, bond_slots),
         wait_unload(),
     )
     .await;
+}
+
+#[cfg(feature = "central")]
+async fn central_connection_events(
+    conn: &Connection<'_, DefaultPacketPool>,
+    stack: &Stack<'_, nrf_sdc::SoftdeviceController<'static>, DefaultPacketPool>,
+    cfg: &RuntimeCfg,
+    bond_slots: &RefCell<heapless::Vec<(Identity, u8), BOND_SLOT_CAP>>,
+) {
+    loop {
+        let tick = async {
+            link_control_once(conn, stack, cfg).await;
+            Timer::after(Duration::from_millis(20)).await;
+        };
+        match select(conn.next(), tick).await {
+            Either::First(event) => match event {
+                ConnectionEvent::Disconnected { reason } => {
+                    use core::fmt::Write;
+                    let mut s: heapless::String<48> = heapless::String::new();
+                    let _ = write!(
+                        s,
+                        "[link] disconnected reason=0x{:02x}\0",
+                        reason.into_inner()
+                    );
+                    log_str(cfg, &s);
+                    break;
+                }
+                ConnectionEvent::RequestConnectionParams(req) => {
+                    let _ = req.accept(None, stack).await;
+                }
+                ConnectionEvent::ConnectionParamsUpdated {
+                    conn_interval,
+                    peripheral_latency,
+                    supervision_timeout,
+                } => {
+                    if let Some(cb) = cfg.callbacks.on_conn_params {
+                        cb(
+                            conn_interval.as_millis().min(u16::MAX as u64) as u16,
+                            peripheral_latency,
+                            supervision_timeout.as_millis().min(u16::MAX as u64) as u16,
+                            cfg.user,
+                        );
+                    }
+                }
+                ConnectionEvent::PhyUpdated { tx_phy, rx_phy } => {
+                    if let Some(cb) = cfg.callbacks.on_phy_update {
+                        cb(phy_to_c(tx_phy), phy_to_c(rx_phy), cfg.user);
+                    }
+                }
+                ConnectionEvent::DataLengthUpdated {
+                    max_tx_octets,
+                    max_rx_octets,
+                    ..
+                } => {
+                    if let Some(cb) = cfg.callbacks.on_data_length_update {
+                        cb(max_tx_octets, max_rx_octets, cfg.user);
+                    }
+                }
+                ConnectionEvent::PassKeyDisplay(key) => {
+                    emit_security_event(
+                        cfg,
+                        1,
+                        trouble_host::prelude::SecurityLevel::NoEncryption,
+                        key.value(),
+                        false,
+                    );
+                }
+                ConnectionEvent::PassKeyConfirm(key) => {
+                    emit_security_event(
+                        cfg,
+                        2,
+                        trouble_host::prelude::SecurityLevel::NoEncryption,
+                        key.value(),
+                        false,
+                    );
+                }
+                ConnectionEvent::PassKeyInput => {
+                    emit_security_event(
+                        cfg,
+                        3,
+                        trouble_host::prelude::SecurityLevel::NoEncryption,
+                        0,
+                        false,
+                    );
+                }
+                ConnectionEvent::PairingComplete {
+                    security_level,
+                    bond,
+                } => {
+                    if let Some(b) = bond.as_ref() {
+                        store_bond(cfg, bond_slots, b);
+                    }
+                    emit_security_event(
+                        cfg,
+                        4,
+                        security_level,
+                        0,
+                        bond.as_ref().is_some_and(|b| b.is_bonded),
+                    );
+                }
+                ConnectionEvent::PairingFailed(_) => {
+                    emit_security_event(
+                        cfg,
+                        5,
+                        trouble_host::prelude::SecurityLevel::NoEncryption,
+                        0,
+                        false,
+                    );
+                }
+                ConnectionEvent::BondLost => {
+                    emit_security_event(
+                        cfg,
+                        6,
+                        trouble_host::prelude::SecurityLevel::NoEncryption,
+                        0,
+                        false,
+                    );
+                }
+                ConnectionEvent::Encrypted {
+                    security_level,
+                    bond,
+                } => {
+                    if let Some(b) = bond.as_ref() {
+                        store_bond(cfg, bond_slots, b);
+                    }
+                    emit_security_event(
+                        cfg,
+                        7,
+                        security_level,
+                        0,
+                        bond.as_ref().is_some_and(|b| b.is_bonded),
+                    );
+                }
+                ConnectionEvent::OobRequest => {
+                    log_str(cfg, "[security] OOB data requested\0");
+                }
+                _ => {}
+            },
+            Either::Second(()) => {}
+        }
+    }
 }
 
 /// Central side of L2CAP: open a channel to the peer's PSM, then pump it.
