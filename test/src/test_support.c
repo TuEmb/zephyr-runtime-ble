@@ -54,6 +54,13 @@ static uint8_t on_oob_request(uint8_t *local_random, uint8_t *local_confirm, uin
 	return 0;
 }
 
+static void on_oob_local_data(const uint8_t *local_random, const uint8_t *local_confirm, void *user)
+{
+	ARG_UNUSED(local_random);
+	ARG_UNUSED(local_confirm);
+	ARG_UNUSED(user);
+}
+
 static const runtime_ble_config_t cfg = {
 	.device_name = "RTBLE-TEST",
 	.manufacturer_id = 0xFFFF,
@@ -65,6 +72,7 @@ static const runtime_ble_config_t cfg = {
 		.on_bond_load = on_bond_load,
 		.on_bond_store = on_bond_store,
 		.on_oob_request = on_oob_request,
+		.on_oob_local_data = on_oob_local_data,
 		.on_log = on_log,
 	},
 };

@@ -162,6 +162,11 @@ typedef struct {
 	 * the TK in *_random and zero *_confirm. */
 	uint8_t (*on_oob_request)(uint8_t *local_random, uint8_t *local_confirm,
 				  uint8_t *peer_random, uint8_t *peer_confirm, void *user);
+	/* Runtime-generated local OOB data, emitted after load when
+	 * security_oob_available is set. Send these 16-byte random/confirm values
+	 * to the peer through your out-of-band channel. */
+	void (*on_oob_local_data)(const uint8_t *local_random, const uint8_t *local_confirm,
+				  void *user);
 
 	/* Optional text log line (NUL-terminated) for the app's console. */
 	void (*on_log)(const char *line, void *user);

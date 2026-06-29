@@ -423,6 +423,7 @@ pub(crate) fn serve_session(
     };
     let server: &Srv = &gatt.server;
     restore_bonds(stack, cfg, &gatt.bond_slots);
+    emit_local_oob_data(stack, cfg);
 
     let mut peripheral = stack.peripheral();
     let runner = stack.runner();
@@ -659,6 +660,20 @@ fn store_bond(
     let mut blob = [0u8; BOND_BLOB_LEN];
     let len = serialize_bond(bond, &mut blob);
     store(slot, blob.as_ptr(), len, cfg.user);
+}
+
+fn emit_local_oob_data(
+    stack: &Stack<'_, nrf_sdc::SoftdeviceController<'static>, DefaultPacketPool>,
+    cfg: &RuntimeCfg,
+) {
+    if cfg.security_oob_available == 0 {
+        return;
+    }
+    let Some(cb) = cfg.callbacks.on_oob_local_data else {
+        return;
+    };
+    let oob = stack.get_local_oob_data();
+    cb(oob.random.as_ptr(), oob.confirm.as_ptr(), cfg.user);
 }
 
 fn emit_security_event(
@@ -899,6 +914,7 @@ pub(crate) fn serve_central(
 ) {
     let bond_slots = RefCell::new(heapless::Vec::new());
     restore_bonds(stack, cfg, &bond_slots);
+    emit_local_oob_data(stack, cfg);
     // The host runner must run concurrently so HCI events (connection complete,
     // ATT responses, notifications) are processed while we connect and talk.
     let runner = stack.runner();

@@ -118,6 +118,9 @@ pub struct RuntimeBleCallbacks {
             user: *mut c_void,
         ) -> u8,
     >,
+    /// Security: runtime-generated local OOB data after stack load.
+    pub on_oob_local_data:
+        Option<extern "C" fn(local_random: *const u8, local_confirm: *const u8, user: *mut c_void)>,
     /// Optional NUL-terminated text log line for the app's console.
     pub on_log: Option<extern "C" fn(line: *const c_char, user: *mut c_void)>,
     /// L2CAP: channel established.
