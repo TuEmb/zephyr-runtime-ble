@@ -441,6 +441,10 @@ int runtime_ble_client_write_no_rsp(uint16_t handle, const uint8_t *data, size_t
  * via on_notification. */
 int runtime_ble_client_subscribe(uint16_t handle);
 
+/* Subscribe to a characteristic by enabling indications (CCCD=0x0002);
+ * incoming indicated values arrive via on_notification. */
+int runtime_ble_client_subscribe_indicate(uint16_t handle);
+
 /* ---- L2CAP API ----
  * Available with a l2cap-capable lib (CONFIG_RUNTIME_BLE_L2CAP=y) and
  * config.l2cap_psm != 0; otherwise returns RUNTIME_BLE_ERR_INVALID. The channel

@@ -54,9 +54,9 @@ use crate::{
 #[cfg(feature = "central")]
 use crate::{
     CCMD_CONNECT, CCMD_DISCONNECT, CCMD_DISCOVER, CCMD_DISCOVER_DESCRIPTORS, CCMD_NONE, CCMD_READ,
-    CCMD_SCAN_START, CCMD_SCAN_STOP, CCMD_SUBSCRIBE, CCMD_WRITE, CCMD_WRITE_NO_RSP, CENTRAL_ADDR,
-    CENTRAL_ADDR_KIND, CENTRAL_CMD, CENTRAL_HANDLE, CENTRAL_UUID, CENTRAL_UUID_LEN, SCAN_ACTIVE,
-    SCAN_INTERVAL_MS, SCAN_TIMEOUT_MS, SCAN_WINDOW_MS,
+    CCMD_SCAN_START, CCMD_SCAN_STOP, CCMD_SUBSCRIBE, CCMD_SUBSCRIBE_INDICATE, CCMD_WRITE,
+    CCMD_WRITE_NO_RSP, CENTRAL_ADDR, CENTRAL_ADDR_KIND, CENTRAL_CMD, CENTRAL_HANDLE,
+    CENTRAL_UUID, CENTRAL_UUID_LEN, SCAN_ACTIVE, SCAN_INTERVAL_MS, SCAN_TIMEOUT_MS, SCAN_WINDOW_MS,
     SCAN_FILTER_ADDR, SCAN_FILTER_ADDR_ENABLED, SCAN_FILTER_ADDR_KIND, SCAN_FILTER_DUPLICATES,
     SCAN_PHY_OPTIONS,
 };
@@ -1472,7 +1472,7 @@ async fn client_session(
                         let _ = client.write_handle(h, &wbuf[..len]).await;
                     }
                 }
-                CCMD_SUBSCRIBE => {
+                cmd @ (CCMD_SUBSCRIBE | CCMD_SUBSCRIBE_INDICATE) => {
                     let h = CENTRAL_HANDLE.load(Ordering::Acquire) as u16;
                     let cccd = store
                         .borrow()
@@ -1480,7 +1480,12 @@ async fn client_session(
                         .find(|(handle, _)| *handle == h)
                         .and_then(|(_, cccd)| *cccd)
                         .unwrap_or(h + 1);
-                    let _ = client.write_handle(cccd, &[0x01, 0x00]).await;
+                    let value = if cmd == CCMD_SUBSCRIBE_INDICATE {
+                        [0x02, 0x00]
+                    } else {
+                        [0x01, 0x00]
+                    };
+                    let _ = client.write_handle(cccd, &value).await;
                 }
                 _ => {}
             }

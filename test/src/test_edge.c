@@ -68,6 +68,12 @@ ZTEST(runtime_ble_edge, test_security_argument_validation)
 		      "passkey must be a 6-digit value");
 }
 
+ZTEST(runtime_ble_edge, test_central_indicate_subscribe_requires_central_lib)
+{
+	zassert_equal(runtime_ble_client_subscribe_indicate(1), RUNTIME_BLE_ERR_INVALID,
+		      "default peripheral lib must reject central indication subscribe");
+}
+
 ZTEST(runtime_ble_edge, test_oob_security_config_init)
 {
 	runtime_ble_config_t cfg = *test_base_cfg();

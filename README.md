@@ -206,6 +206,8 @@ runtime_ble_client_discover(svc, 16);   // -> on_discovered(handle, …)
 runtime_ble_client_discover_descriptors(start, end);
                                         // -> on_descriptor(handle, uuid, …)
 runtime_ble_client_subscribe(handle);   // -> on_notification(handle, …)
+runtime_ble_client_subscribe_indicate(handle);
+                                        // subscribe with CCCD indications
 runtime_ble_client_write(handle, buf, n);
 runtime_ble_client_write_no_rsp(handle, buf, n);
 runtime_ble_client_read(handle);        // -> on_read(handle, …)
@@ -221,6 +223,8 @@ connectable/scannable, scan-response, legacy/extended, PHY, TX power, and SID.
 Use `runtime_ble_scan_start_ex()` to enable controller duplicate filtering,
 select scan PHYs (1M, 2M, coded), or limit scan reports to one peer address
 with the controller accept list.
+Use `runtime_ble_client_subscribe_indicate()` for peers that expose indications
+instead of notifications; both deliver incoming values via `on_notification`.
 See [`examples/gatt_client/`](examples/gatt_client/) (HW-verified
 against the peripheral echo example). The role is feature-gated so peripheral-
 only apps stay on the lean default lib (see [`rust/README.md`](rust/README.md)).
