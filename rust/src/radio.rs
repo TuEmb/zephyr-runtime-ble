@@ -1192,7 +1192,14 @@ async fn l2cap_serve(
 // central` (the SDC central support is added in chip/<soc>.rs::build_sdc).
 // ---------------------------------------------------------------------------
 #[cfg(feature = "central")]
-type ClientP<'a> = GattClient<'a, nrf_sdc::SoftdeviceController<'static>, DefaultPacketPool, 4>;
+const CLIENT_SERVICE_CAP: usize = 8;
+#[cfg(feature = "central")]
+const CLIENT_CHAR_CAP: usize = 32;
+#[cfg(feature = "central")]
+type ClientP<'a> =
+    GattClient<'a, nrf_sdc::SoftdeviceController<'static>, DefaultPacketPool, CLIENT_SERVICE_CAP>;
+#[cfg(feature = "central")]
+type ClientCharStore = RefCell<heapless::Vec<(u16, Option<u16>), CLIENT_CHAR_CAP>>;
 
 #[cfg(feature = "central")]
 enum IdleCmd {
@@ -1432,7 +1439,7 @@ async fn client_session(
     let mut listener = client.listen_all().ok();
     // Remember (value handle, CCCD handle) of discovered characteristics so
     // subscribe() can write the right CCCD.
-    let store: RefCell<heapless::Vec<(u16, Option<u16>), 8>> = RefCell::new(heapless::Vec::new());
+    let store: ClientCharStore = RefCell::new(heapless::Vec::new());
 
     let commands = async {
         loop {
@@ -1523,10 +1530,10 @@ async fn client_session(
 async fn report_service_chars(
     client: &ClientP<'_>,
     service: &trouble_host::gatt::ServiceHandle,
-    store: &RefCell<heapless::Vec<(u16, Option<u16>), 8>>,
+    store: &ClientCharStore,
     cfg: &RuntimeCfg,
 ) {
-    if let Ok(chars) = client.characteristics::<8>(service).await {
+    if let Ok(chars) = client.characteristics::<CLIENT_CHAR_CAP>(service).await {
         for c in chars.iter() {
             let _ = store.borrow_mut().push((c.handle, c.cccd_handle));
             if let Some(cb) = cfg.callbacks.on_discovered {
@@ -1546,7 +1553,7 @@ async fn report_service_chars(
 #[cfg(feature = "central")]
 async fn client_discover_all(
     client: &ClientP<'_>,
-    store: &RefCell<heapless::Vec<(u16, Option<u16>), 8>>,
+    store: &ClientCharStore,
     cfg: &RuntimeCfg,
 ) {
     match client.services().await {
@@ -1564,7 +1571,7 @@ async fn client_discover_all(
 #[cfg(feature = "central")]
 async fn client_discover(
     client: &ClientP<'_>,
-    store: &RefCell<heapless::Vec<(u16, Option<u16>), 8>>,
+    store: &ClientCharStore,
     cfg: &RuntimeCfg,
 ) {
     let len = CENTRAL_UUID_LEN.load(Ordering::Acquire);

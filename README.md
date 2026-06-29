@@ -228,6 +228,8 @@ select scan PHYs (1M, 2M, coded), or limit scan reports to one peer address
 with the controller accept list.
 Use `runtime_ble_client_discover_all()` when the central does not know the
 target service UUID up front; discovered characteristics still use `on_discovered`.
+The central client tracks up to 8 primary services and 32 discovered
+characteristics for follow-up descriptor discovery and CCCD subscription.
 Use `runtime_ble_client_subscribe_indicate()` for peers that expose indications
 instead of notifications; both deliver incoming values via `on_notification`.
 Use `runtime_ble_client_read_blob()` to continue reading long attributes from a
