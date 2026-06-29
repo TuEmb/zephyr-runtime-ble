@@ -2,7 +2,8 @@
  * runtime-ble example: a fully user-defined BLE peripheral.
  *
  * Everything is configured from this app — no Rust rebuild:
- *   - advertising: name, manufacturer data, interval, discoverable mode
+ *   - advertising: name, service UUID, manufacturer data, scan response,
+ *     interval, discoverable mode
  *   - GATT: a custom 128-bit vendor service with an RX (write) characteristic
  *     and a TX (notify) characteristic.
  *
@@ -41,6 +42,10 @@ static const runtime_ble_service_def_t my_services[] = {
 
 /* Demo manufacturer-specific advertising payload (after the company id). */
 static const uint8_t mfg_data[] = {0x52, 0x42, 0x01};
+/* Raw AD structure: Complete Local Name "RUNTIME-BLE" for scan response. */
+static const uint8_t scan_rsp[] = {
+	12, 0x09, 'R', 'U', 'N', 'T', 'I', 'M', 'E', '-', 'B', 'L', 'E'
+};
 
 static void on_log(const char *line, void *user)
 {
@@ -76,6 +81,10 @@ int main(void)
 		.manufacturer_id = 0xFFFF,
 		.manufacturer_data = mfg_data,
 		.manufacturer_data_len = sizeof(mfg_data),
+		.adv_service_uuid = svc_uuid,
+		.adv_service_uuid_len = sizeof(svc_uuid),
+		.scan_response_data = scan_rsp,
+		.scan_response_data_len = sizeof(scan_rsp),
 		.adv_interval_min_ms = 30,
 		.adv_interval_max_ms = 60,
 		.discoverable = 0, /* general-discoverable */

@@ -137,6 +137,10 @@ typedef struct {
 	uint16_t                manufacturer_id;      /* company ID for the manufacturer AD   */
 	const uint8_t          *manufacturer_data;    /* bytes after company ID; NULL -> none */
 	uint16_t                manufacturer_data_len;
+	const uint8_t          *adv_service_uuid;     /* optional 2- or 16-byte UUID in AD */
+	uint8_t                 adv_service_uuid_len; /* 0, 2, or 16 */
+	const uint8_t          *scan_response_data;   /* raw AD structures, <=31 bytes */
+	uint8_t                 scan_response_data_len;
 	uint16_t                adv_interval_min_ms;  /* 0 -> 30 ms                            */
 	uint16_t                adv_interval_max_ms;  /* 0 -> 60 ms                            */
 	uint8_t                 discoverable;         /* 0 general (default), 1 limited, 2 none */

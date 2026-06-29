@@ -111,6 +111,7 @@ static const runtime_ble_service_def_t svcs[] = {
 };
 static const runtime_ble_config_t cfg = {
     .device_name = "RUNTIME-BLE", .manufacturer_id = 0xFFFF,
+    .adv_service_uuid = svc_uuid, .adv_service_uuid_len = 16,
     .adv_interval_min_ms = 30, .adv_interval_max_ms = 60,
     .services = svcs, .num_services = 1,
     .callbacks = { .on_write = on_write, .on_connected = on_conn, ... },

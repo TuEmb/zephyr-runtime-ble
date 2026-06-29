@@ -1032,17 +1032,13 @@ async fn advertise<'a>(
         &[]
     };
     let mut adv = [0u8; 31];
-    let adv_len = AdStructure::encode_slice(
-        &[
-            AdStructure::Flags(flags),
-            AdStructure::ManufacturerSpecificData {
-                company_identifier: cfg.manufacturer_id,
-                payload: man,
-            },
-            AdStructure::CompleteLocalName(name.as_bytes()),
-        ],
-        &mut adv[..],
-    )?;
+    let adv_len = build_adv_payload(cfg, flags, man, name, &mut adv)
+        .ok_or(BleHostError::BleHost(trouble_host::Error::InvalidValue))?;
+    let scan_data: &[u8] = if !cfg.scan_response_data.is_null() && cfg.scan_response_data_len > 0 {
+        unsafe { core::slice::from_raw_parts(cfg.scan_response_data, cfg.scan_response_data_len.min(31) as usize) }
+    } else {
+        &[]
+    };
     let min_ms = if cfg.adv_interval_min_ms == 0 {
         30
     } else {
@@ -1063,11 +1059,66 @@ async fn advertise<'a>(
             &adv_params,
             Advertisement::ConnectableScannableUndirected {
                 adv_data: &adv[..adv_len],
-                scan_data: &[],
+                scan_data,
             },
         )
         .await?;
     Ok(advertiser.accept().await?)
+}
+
+fn push_ad(dst: &mut [u8; 31], pos: &mut usize, ty: u8, data: &[u8]) -> bool {
+    let need = data.len() + 2;
+    if *pos + need > dst.len() || data.len() > 254 {
+        return false;
+    }
+    dst[*pos] = (data.len() + 1) as u8;
+    dst[*pos + 1] = ty;
+    dst[*pos + 2..*pos + need].copy_from_slice(data);
+    *pos += need;
+    true
+}
+
+fn build_adv_payload(
+    cfg: &RuntimeCfg,
+    flags: u8,
+    manufacturer_data: &[u8],
+    name: &str,
+    dst: &mut [u8; 31],
+) -> Option<usize> {
+    let mut pos = 0usize;
+    if !push_ad(dst, &mut pos, 0x01, &[flags]) {
+        return None;
+    }
+    if cfg.manufacturer_id != 0 || !manufacturer_data.is_empty() {
+        let mut man = [0u8; 29];
+        let total = 2 + manufacturer_data.len();
+        if total > man.len() {
+            return None;
+        }
+        man[..2].copy_from_slice(&cfg.manufacturer_id.to_le_bytes());
+        man[2..total].copy_from_slice(manufacturer_data);
+        if !push_ad(dst, &mut pos, 0xff, &man[..total]) {
+            return None;
+        }
+    }
+    if !cfg.adv_service_uuid.is_null() && (cfg.adv_service_uuid_len == 2 || cfg.adv_service_uuid_len == 16) {
+        let uuid = unsafe { core::slice::from_raw_parts(cfg.adv_service_uuid, cfg.adv_service_uuid_len as usize) };
+        let ty = if cfg.adv_service_uuid_len == 2 { 0x03 } else { 0x07 };
+        if !push_ad(dst, &mut pos, ty, uuid) {
+            return None;
+        }
+    }
+    if !push_ad(dst, &mut pos, 0x09, name.as_bytes()) {
+        let avail = dst.len().saturating_sub(pos);
+        if avail < 3 {
+            return None;
+        }
+        let short_len = name.len().min(avail - 2);
+        if !push_ad(dst, &mut pos, 0x08, &name.as_bytes()[..short_len]) {
+            return None;
+        }
+    }
+    Some(pos)
 }
 
 async fn connection_task(
