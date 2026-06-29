@@ -261,6 +261,7 @@ pub(crate) const CCMD_DISCOVER: u32 = 5;
 pub(crate) const CCMD_READ: u32 = 6;
 pub(crate) const CCMD_WRITE: u32 = 7;
 pub(crate) const CCMD_SUBSCRIBE: u32 = 8;
+pub(crate) const CCMD_WRITE_NO_RSP: u32 = 9;
 pub(crate) static CENTRAL_CMD: AtomicU32 = AtomicU32::new(CCMD_NONE);
 /// Attribute handle (read/write/subscribe) for the pending command.
 pub(crate) static CENTRAL_HANDLE: AtomicU32 = AtomicU32::new(0);
@@ -551,8 +552,8 @@ pub extern "C" fn runtime_ble_client_discover(uuid: *const u8, uuid_len: u8) -> 
 pub extern "C" fn runtime_ble_client_read(handle: u16) -> c_int {
     central_cmd(CCMD_READ, handle as u32)
 }
-#[no_mangle]
-pub extern "C" fn runtime_ble_client_write(handle: u16, data: *const u8, len: usize) -> c_int {
+
+fn central_write(cmd: u32, handle: u16, data: *const u8, len: usize) -> c_int {
     #[cfg(feature = "central")]
     {
         if data.is_null() || len == 0 || len > SEND_BUF_CAP {
@@ -562,14 +563,29 @@ pub extern "C" fn runtime_ble_client_write(handle: u16, data: *const u8, len: us
             core::ptr::copy_nonoverlapping(data, core::ptr::addr_of_mut!(SEND_BUF) as *mut u8, len);
         }
         SEND_LEN.store(len, Ordering::Release);
-        central_cmd(CCMD_WRITE, handle as u32)
+        central_cmd(cmd, handle as u32)
     }
     #[cfg(not(feature = "central"))]
     {
-        let _ = (handle, data, len);
+        let _ = (cmd, handle, data, len);
         RUNTIME_BLE_ERR_INVALID
     }
 }
+
+#[no_mangle]
+pub extern "C" fn runtime_ble_client_write(handle: u16, data: *const u8, len: usize) -> c_int {
+    central_write(CCMD_WRITE, handle, data, len)
+}
+
+#[no_mangle]
+pub extern "C" fn runtime_ble_client_write_no_rsp(
+    handle: u16,
+    data: *const u8,
+    len: usize,
+) -> c_int {
+    central_write(CCMD_WRITE_NO_RSP, handle, data, len)
+}
+
 #[no_mangle]
 pub extern "C" fn runtime_ble_client_subscribe(handle: u16) -> c_int {
     central_cmd(CCMD_SUBSCRIBE, handle as u32)

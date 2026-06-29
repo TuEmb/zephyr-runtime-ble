@@ -165,6 +165,7 @@ runtime_ble_connect_addr(addr, RUNTIME_BLE_ADDR_RANDOM);
 runtime_ble_client_discover(svc, 16);   // -> on_discovered(handle, …)
 runtime_ble_client_subscribe(handle);   // -> on_notification(handle, …)
 runtime_ble_client_write(handle, buf, n);
+runtime_ble_client_write_no_rsp(handle, buf, n);
 runtime_ble_client_read(handle);        // -> on_read(handle, …)
 ```
 Use `on_scan_result_ext` when the central needs the peer's address type; pass

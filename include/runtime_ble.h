@@ -325,6 +325,9 @@ int runtime_ble_client_read(uint16_t handle);
 /* Write a characteristic by attribute handle (with response). */
 int runtime_ble_client_write(uint16_t handle, const uint8_t *data, size_t len);
 
+/* Write a characteristic by attribute handle without ATT response. */
+int runtime_ble_client_write_no_rsp(uint16_t handle, const uint8_t *data, size_t len);
+
 /* Subscribe to a characteristic (enable notify/indicate); incoming values arrive
  * via on_notification. */
 int runtime_ble_client_subscribe(uint16_t handle);

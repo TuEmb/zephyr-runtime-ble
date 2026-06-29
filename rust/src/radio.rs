@@ -49,8 +49,8 @@ use crate::{
 use crate::{
     CCMD_CONNECT, CCMD_DISCONNECT, CCMD_DISCOVER, CCMD_NONE, CCMD_READ, CCMD_SCAN_START,
     CCMD_SCAN_STOP, CCMD_SUBSCRIBE, CCMD_WRITE, CENTRAL_ADDR, CENTRAL_ADDR_KIND, CENTRAL_CMD,
-    CENTRAL_HANDLE, CENTRAL_UUID, CENTRAL_UUID_LEN, SCAN_ACTIVE, SCAN_INTERVAL_MS, SCAN_TIMEOUT_MS,
-    SCAN_WINDOW_MS,
+    CCMD_WRITE_NO_RSP, CENTRAL_HANDLE, CENTRAL_UUID, CENTRAL_UUID_LEN, SCAN_ACTIVE,
+    SCAN_INTERVAL_MS, SCAN_TIMEOUT_MS, SCAN_WINDOW_MS,
 };
 #[cfg(feature = "l2cap")]
 use crate::{L2CAP_SEND_BUF, L2CAP_SEND_LEN, L2CAP_SEND_REQ};
@@ -1170,7 +1170,7 @@ async fn client_session(
                         Err(_) => log_str(cfg, "[central] read failed\0"),
                     }
                 }
-                CCMD_WRITE => {
+                cmd @ (CCMD_WRITE | CCMD_WRITE_NO_RSP) => {
                     let h = CENTRAL_HANDLE.load(Ordering::Acquire) as u16;
                     let len = SEND_LEN
                         .load(Ordering::Acquire)
@@ -1184,7 +1184,11 @@ async fn client_session(
                             len,
                         );
                     }
-                    let _ = client.write_handle(h, &wbuf[..len]).await;
+                    if cmd == CCMD_WRITE_NO_RSP {
+                        let _ = client.write_handle_without_response(h, &wbuf[..len]).await;
+                    } else {
+                        let _ = client.write_handle(h, &wbuf[..len]).await;
+                    }
                 }
                 CCMD_SUBSCRIBE => {
                     let h = CENTRAL_HANDLE.load(Ordering::Acquire) as u16;

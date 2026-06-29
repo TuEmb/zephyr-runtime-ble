@@ -141,8 +141,8 @@ int main(void)
 		k_sleep(K_MSEC(400));
 		const uint8_t msg[] = {'d', 'u', 'a', 'l', '-', 'p', 'i', 'n', 'g'};
 
-		printk("[cli] write peer RX handle=%u 'dual-ping'\n", c_rx);
-		runtime_ble_client_write(c_rx, msg, sizeof(msg));
+		printk("[cli] write-no-rsp peer RX handle=%u 'dual-ping'\n", c_rx);
+		runtime_ble_client_write_no_rsp(c_rx, msg, sizeof(msg));
 		k_sleep(K_MSEC(1500));
 	}
 	printk("[app] dual demo: client done; still advertising as a server\n");

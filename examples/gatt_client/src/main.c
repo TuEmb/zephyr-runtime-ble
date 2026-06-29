@@ -142,8 +142,8 @@ int main(void)
 		k_sleep(K_MSEC(500));
 		const uint8_t msg[] = {'p', 'i', 'n', 'g'};
 
-		printk("[app] write RX handle=%u 'ping'\n", rx_handle);
-		runtime_ble_client_write(rx_handle, msg, sizeof(msg));
+		printk("[app] write-no-rsp RX handle=%u 'ping'\n", rx_handle);
+		runtime_ble_client_write_no_rsp(rx_handle, msg, sizeof(msg));
 		k_sleep(K_MSEC(1500)); /* expect the echo back as a NOTIFY */
 	} else {
 		printk("[app] discovery incomplete (%d chars)\n", discovered);
