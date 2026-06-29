@@ -342,6 +342,7 @@ pub(crate) const CCMD_SUBSCRIBE: u32 = 8;
 pub(crate) const CCMD_WRITE_NO_RSP: u32 = 9;
 pub(crate) const CCMD_DISCOVER_DESCRIPTORS: u32 = 10;
 pub(crate) const CCMD_SUBSCRIBE_INDICATE: u32 = 11;
+pub(crate) const CCMD_READ_BLOB: u32 = 12;
 pub(crate) static CENTRAL_CMD: AtomicU32 = AtomicU32::new(CCMD_NONE);
 /// Attribute handle (read/write/subscribe) for the pending command.
 pub(crate) static CENTRAL_HANDLE: AtomicU32 = AtomicU32::new(0);
@@ -764,6 +765,11 @@ pub extern "C" fn runtime_ble_client_discover(uuid: *const u8, uuid_len: u8) -> 
 #[no_mangle]
 pub extern "C" fn runtime_ble_client_read(handle: u16) -> c_int {
     central_cmd(CCMD_READ, handle as u32)
+}
+
+#[no_mangle]
+pub extern "C" fn runtime_ble_client_read_blob(handle: u16, offset: u16) -> c_int {
+    central_cmd(CCMD_READ_BLOB, ((offset as u32) << 16) | handle as u32)
 }
 
 #[no_mangle]

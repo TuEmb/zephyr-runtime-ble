@@ -211,6 +211,8 @@ runtime_ble_client_subscribe_indicate(handle);
 runtime_ble_client_write(handle, buf, n);
 runtime_ble_client_write_no_rsp(handle, buf, n);
 runtime_ble_client_read(handle);        // -> on_read(handle, …)
+runtime_ble_client_read_blob(handle, off);
+                                        // long reads from an ATT offset
 ```
 Set `central_conn_min_interval_ms`, `central_conn_max_interval_ms`,
 `central_conn_latency`, and `central_conn_timeout_ms` to tune the initial LE
@@ -225,6 +227,8 @@ select scan PHYs (1M, 2M, coded), or limit scan reports to one peer address
 with the controller accept list.
 Use `runtime_ble_client_subscribe_indicate()` for peers that expose indications
 instead of notifications; both deliver incoming values via `on_notification`.
+Use `runtime_ble_client_read_blob()` to continue reading long attributes from a
+specific ATT offset; returned bytes still arrive through `on_read`.
 See [`examples/gatt_client/`](examples/gatt_client/) (HW-verified
 against the peripheral echo example). The role is feature-gated so peripheral-
 only apps stay on the lean default lib (see [`rust/README.md`](rust/README.md)).

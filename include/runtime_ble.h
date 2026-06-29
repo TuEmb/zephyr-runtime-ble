@@ -431,6 +431,9 @@ int runtime_ble_client_discover_descriptors(uint16_t start_handle, uint16_t end_
 /* Read a characteristic by attribute handle; the value arrives via on_read. */
 int runtime_ble_client_read(uint16_t handle);
 
+/* Read a long attribute value starting at an ATT offset; bytes arrive via on_read. */
+int runtime_ble_client_read_blob(uint16_t handle, uint16_t offset);
+
 /* Write a characteristic by attribute handle (with response). */
 int runtime_ble_client_write(uint16_t handle, const uint8_t *data, size_t len);
 

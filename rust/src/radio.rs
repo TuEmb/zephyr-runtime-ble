@@ -54,11 +54,11 @@ use crate::{
 #[cfg(feature = "central")]
 use crate::{
     CCMD_CONNECT, CCMD_DISCONNECT, CCMD_DISCOVER, CCMD_DISCOVER_DESCRIPTORS, CCMD_NONE, CCMD_READ,
-    CCMD_SCAN_START, CCMD_SCAN_STOP, CCMD_SUBSCRIBE, CCMD_SUBSCRIBE_INDICATE, CCMD_WRITE,
-    CCMD_WRITE_NO_RSP, CENTRAL_ADDR, CENTRAL_ADDR_KIND, CENTRAL_CMD, CENTRAL_HANDLE,
-    CENTRAL_UUID, CENTRAL_UUID_LEN, SCAN_ACTIVE, SCAN_INTERVAL_MS, SCAN_TIMEOUT_MS, SCAN_WINDOW_MS,
-    SCAN_FILTER_ADDR, SCAN_FILTER_ADDR_ENABLED, SCAN_FILTER_ADDR_KIND, SCAN_FILTER_DUPLICATES,
-    SCAN_PHY_OPTIONS,
+    CCMD_READ_BLOB, CCMD_SCAN_START, CCMD_SCAN_STOP, CCMD_SUBSCRIBE, CCMD_SUBSCRIBE_INDICATE,
+    CCMD_WRITE, CCMD_WRITE_NO_RSP, CENTRAL_ADDR, CENTRAL_ADDR_KIND, CENTRAL_CMD, CENTRAL_HANDLE,
+    CENTRAL_UUID, CENTRAL_UUID_LEN, SCAN_ACTIVE, SCAN_FILTER_ADDR, SCAN_FILTER_ADDR_ENABLED,
+    SCAN_FILTER_ADDR_KIND, SCAN_FILTER_DUPLICATES, SCAN_INTERVAL_MS, SCAN_PHY_OPTIONS,
+    SCAN_TIMEOUT_MS, SCAN_WINDOW_MS,
 };
 #[cfg(feature = "l2cap")]
 use crate::{L2CAP_SEND_BUF, L2CAP_SEND_LEN, L2CAP_SEND_REQ};
@@ -1440,10 +1440,17 @@ async fn client_session(
                 CCMD_DISCONNECT => conn.disconnect(),
                 CCMD_DISCOVER => client_discover(&client, &store, cfg).await,
                 CCMD_DISCOVER_DESCRIPTORS => client_discover_descriptors(&client, cfg).await,
-                CCMD_READ => {
-                    let h = CENTRAL_HANDLE.load(Ordering::Acquire) as u16;
+                cmd @ (CCMD_READ | CCMD_READ_BLOB) => {
+                    let packed = CENTRAL_HANDLE.load(Ordering::Acquire);
+                    let h = packed as u16;
+                    let offset = (packed >> 16) as u16;
                     let mut buf = [0u8; VALUE_LEN];
-                    match client.read_handle(h, &mut buf).await {
+                    let read = if cmd == CCMD_READ_BLOB {
+                        client.read_handle_blob(h, offset, &mut buf).await
+                    } else {
+                        client.read_handle(h, &mut buf).await
+                    };
+                    match read {
                         Ok(n) => {
                             if let Some(cb) = cfg.callbacks.on_read {
                                 cb(h, buf.as_ptr(), n.min(VALUE_LEN), cfg.user);
