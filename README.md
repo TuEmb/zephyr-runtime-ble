@@ -128,7 +128,8 @@ runtime_ble_unload();            // tear down, free session RAM
 ```
 Characteristics are addressed by **flat index** (declaration order). Callbacks:
 `on_connected`, `on_disconnected`, `on_write(chr, …)`, `on_read_value(chr, …)`
-(or `on_data` for the built-in NUS RX), `on_conn_params`, `on_phy_update`,
+(or `on_data` for the built-in NUS RX), `on_subscription(chr, notify, indicate)`
+when a peer writes a CCCD, `on_conn_params`, `on_phy_update`,
 `on_data_length_update`, `on_security_event`, `on_log`. They run on the BLE
 thread — keep them short.
 

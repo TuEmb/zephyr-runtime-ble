@@ -1137,7 +1137,12 @@ fn advertising_parts<'a>(
     let adv_len = build_adv_payload(cfg, flags, man, name, &mut adv)
         .ok_or(BleHostError::BleHost(trouble_host::Error::InvalidValue))?;
     let scan_data: &[u8] = if !cfg.scan_response_data.is_null() && cfg.scan_response_data_len > 0 {
-        unsafe { core::slice::from_raw_parts(cfg.scan_response_data, cfg.scan_response_data_len.min(31) as usize) }
+        unsafe {
+            core::slice::from_raw_parts(
+                cfg.scan_response_data,
+                cfg.scan_response_data_len.min(31) as usize,
+            )
+        }
     } else {
         &[]
     };
@@ -1194,9 +1199,17 @@ fn build_adv_payload(
             return None;
         }
     }
-    if !cfg.adv_service_uuid.is_null() && (cfg.adv_service_uuid_len == 2 || cfg.adv_service_uuid_len == 16) {
-        let uuid = unsafe { core::slice::from_raw_parts(cfg.adv_service_uuid, cfg.adv_service_uuid_len as usize) };
-        let ty = if cfg.adv_service_uuid_len == 2 { 0x03 } else { 0x07 };
+    if !cfg.adv_service_uuid.is_null()
+        && (cfg.adv_service_uuid_len == 2 || cfg.adv_service_uuid_len == 16)
+    {
+        let uuid = unsafe {
+            core::slice::from_raw_parts(cfg.adv_service_uuid, cfg.adv_service_uuid_len as usize)
+        };
+        let ty = if cfg.adv_service_uuid_len == 2 {
+            0x03
+        } else {
+            0x07
+        };
         if !push_ad(dst, &mut pos, ty, uuid) {
             return None;
         }
@@ -1351,17 +1364,28 @@ async fn connection_task(
                         let mut buf = [0u8; VALUE_LEN];
                         let mut n = 0usize;
                         let mut idx = usize::MAX;
+                        let mut sub_idx = usize::MAX;
+                        let mut notify_enabled = 0u8;
+                        let mut indicate_enabled = 0u8;
                         let h = w.handle();
                         for (i, c) in gatt.chars.iter().enumerate() {
                             if c.handle == h {
                                 idx = i;
                                 break;
+                            } else if c.cccd_handle == Some(h) {
+                                sub_idx = i;
+                                break;
                             }
                         }
-                        if idx != usize::MAX {
+                        if idx != usize::MAX || sub_idx != usize::MAX {
                             w.with_data(|_off, data| {
                                 n = data.len().min(VALUE_LEN);
                                 buf[..n].copy_from_slice(&data[..n]);
+                                if sub_idx != usize::MAX && data.len() >= 2 {
+                                    let cccd = u16::from_le_bytes([data[0], data[1]]);
+                                    notify_enabled = u8::from(cccd & 0x0001 != 0);
+                                    indicate_enabled = u8::from(cccd & 0x0002 != 0);
+                                }
                             });
                         }
                         if let Ok(reply) = w.accept() {
@@ -1374,6 +1398,10 @@ async fn connection_task(
                                 }
                             } else if let Some(cb) = cfg.callbacks.on_write {
                                 cb(idx as u16, buf.as_ptr(), n, cfg.user);
+                            }
+                        } else if sub_idx != usize::MAX {
+                            if let Some(cb) = cfg.callbacks.on_subscription {
+                                cb(sub_idx as u16, notify_enabled, indicate_enabled, cfg.user);
                             }
                         }
                     }

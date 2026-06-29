@@ -87,6 +87,10 @@ pub struct RuntimeBleCallbacks {
     /// Central: a notification/indication from a subscribed characteristic.
     pub on_notification:
         Option<extern "C" fn(handle: u16, data: *const u8, len: usize, user: *mut c_void)>,
+    /// Peripheral: peer changed a server-side CCCD.
+    pub on_subscription: Option<
+        extern "C" fn(chr: u16, notify_enabled: u8, indicate_enabled: u8, user: *mut c_void),
+    >,
     /// Link connection parameters changed.
     pub on_conn_params:
         Option<extern "C" fn(interval_ms: u16, latency: u16, timeout_ms: u16, user: *mut c_void)>,
@@ -96,9 +100,8 @@ pub struct RuntimeBleCallbacks {
     pub on_data_length_update:
         Option<extern "C" fn(max_tx_octets: u16, max_rx_octets: u16, user: *mut c_void)>,
     /// Pairing/encryption event.
-    pub on_security_event: Option<
-        extern "C" fn(event: u8, level: u8, passkey: u32, flags: u8, user: *mut c_void),
-    >,
+    pub on_security_event:
+        Option<extern "C" fn(event: u8, level: u8, passkey: u32, flags: u8, user: *mut c_void)>,
     /// Optional NUL-terminated text log line for the app's console.
     pub on_log: Option<extern "C" fn(line: *const c_char, user: *mut c_void)>,
     /// L2CAP: channel established.

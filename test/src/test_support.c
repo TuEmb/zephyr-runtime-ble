@@ -17,6 +17,15 @@ static void on_log(const char *line, void *user)
 	printk("%s\n", line);
 }
 
+static void on_subscription(uint16_t chr, uint8_t notify_enabled, uint8_t indicate_enabled,
+			    void *user)
+{
+	ARG_UNUSED(chr);
+	ARG_UNUSED(notify_enabled);
+	ARG_UNUSED(indicate_enabled);
+	ARG_UNUSED(user);
+}
+
 static const runtime_ble_config_t cfg = {
 	.device_name = "RTBLE-TEST",
 	.manufacturer_id = 0xFFFF,
@@ -24,6 +33,7 @@ static const runtime_ble_config_t cfg = {
 	.adv_interval_max_ms = 60,
 	/* services == NULL -> built-in Nordic UART Service. */
 	.callbacks = {
+		.on_subscription = on_subscription,
 		.on_log = on_log,
 	},
 };

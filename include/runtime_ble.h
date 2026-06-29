@@ -116,6 +116,10 @@ typedef struct {
 	void (*on_read)(uint16_t handle, const uint8_t *data, size_t len, void *user);
 	/* A notification/indication from a subscribed characteristic. */
 	void (*on_notification)(uint16_t handle, const uint8_t *data, size_t len, void *user);
+	/* Peer changed a server-side CCCD. `chr` is the flat characteristic index;
+	 * notify_enabled/indicate_enabled are 0 or 1. */
+	void (*on_subscription)(uint16_t chr, uint8_t notify_enabled,
+				uint8_t indicate_enabled, void *user);
 
 	/* ---- Link updates (peripheral or central connection) ---- */
 	void (*on_conn_params)(uint16_t interval_ms, uint16_t latency,

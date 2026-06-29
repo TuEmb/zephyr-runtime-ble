@@ -74,6 +74,14 @@ static void on_write(uint16_t chr, const uint8_t *data, size_t len, void *user)
 	}
 }
 
+static void on_subscription(uint16_t chr, uint8_t notify_enabled, uint8_t indicate_enabled,
+			    void *user)
+{
+	ARG_UNUSED(user);
+	printk("[app] subscription chr=%u notify=%u indicate=%u\n",
+	       chr, notify_enabled, indicate_enabled);
+}
+
 static void on_security_event(uint8_t event, uint8_t level, uint32_t passkey, uint8_t flags,
 			      void *user)
 {
@@ -107,6 +115,7 @@ int main(void)
 			.on_connected = on_connected,
 			.on_disconnected = on_disconnected,
 			.on_write = on_write,
+			.on_subscription = on_subscription,
 			.on_security_event = on_security_event,
 			.on_log = on_log,
 		},
