@@ -47,18 +47,18 @@ use crate::{
 };
 #[cfg(feature = "central")]
 use crate::{
-    CCMD_CONNECT, CCMD_DISCONNECT, CCMD_DISCOVER, CCMD_NONE, CCMD_READ, CCMD_SCAN_START,
-    CCMD_SCAN_STOP, CCMD_SUBSCRIBE, CCMD_WRITE, CENTRAL_ADDR, CENTRAL_ADDR_KIND, CENTRAL_CMD,
-    CCMD_WRITE_NO_RSP, CENTRAL_HANDLE, CENTRAL_UUID, CENTRAL_UUID_LEN, SCAN_ACTIVE,
+    CCMD_CONNECT, CCMD_DISCONNECT, CCMD_DISCOVER, CCMD_DISCOVER_DESCRIPTORS, CCMD_NONE, CCMD_READ,
+    CCMD_SCAN_START, CCMD_SCAN_STOP, CCMD_SUBSCRIBE, CCMD_WRITE, CCMD_WRITE_NO_RSP, CENTRAL_ADDR,
+    CENTRAL_ADDR_KIND, CENTRAL_CMD, CENTRAL_HANDLE, CENTRAL_UUID, CENTRAL_UUID_LEN, SCAN_ACTIVE,
     SCAN_INTERVAL_MS, SCAN_TIMEOUT_MS, SCAN_WINDOW_MS,
 };
 #[cfg(feature = "l2cap")]
 use crate::{L2CAP_SEND_BUF, L2CAP_SEND_LEN, L2CAP_SEND_REQ};
 use crate::{
     LCMD_CONN_PARAMS, LCMD_DLE, LCMD_NONE, LCMD_PASSKEY_CANCEL, LCMD_PASSKEY_CONFIRM,
-    LCMD_PASSKEY_INPUT, LCMD_SECURITY_REQUEST, LCMD_SET_PHY, LINK_CMD, LINK_CONN_LATENCY,
-    LINK_CONN_MAX_MS, LINK_CONN_MIN_MS, LINK_CONN_TIMEOUT_MS, LINK_DLE_OCTETS, LINK_DLE_TIME_US,
-    LINK_PASSKEY, LINK_PHY, LCMD_READ_RSSI,
+    LCMD_PASSKEY_INPUT, LCMD_READ_RSSI, LCMD_SECURITY_REQUEST, LCMD_SET_PHY, LINK_CMD,
+    LINK_CONN_LATENCY, LINK_CONN_MAX_MS, LINK_CONN_MIN_MS, LINK_CONN_TIMEOUT_MS, LINK_DLE_OCTETS,
+    LINK_DLE_TIME_US, LINK_PASSKEY, LINK_PHY,
 };
 
 // Per-chip bring-up. Exactly one chip feature is enabled; `chip::run` is the
@@ -1165,6 +1165,7 @@ async fn client_session(
             match CENTRAL_CMD.swap(CCMD_NONE, Ordering::AcqRel) {
                 CCMD_DISCONNECT => conn.disconnect(),
                 CCMD_DISCOVER => client_discover(&client, &store, cfg).await,
+                CCMD_DISCOVER_DESCRIPTORS => client_discover_descriptors(&client, cfg).await,
                 CCMD_READ => {
                     let h = CENTRAL_HANDLE.load(Ordering::Acquire) as u16;
                     let mut buf = [0u8; VALUE_LEN];
@@ -1265,6 +1266,25 @@ async fn client_discover(
             }
         }
     }
+}
+
+#[cfg(feature = "central")]
+async fn client_discover_descriptors(client: &ClientP<'_>, cfg: &RuntimeCfg) {
+    let range = CENTRAL_HANDLE.load(Ordering::Acquire);
+    let start = (range >> 16) as u16;
+    let end = range as u16;
+    if start == 0 || end < start {
+        return;
+    }
+    let _ = client
+        .find_information(start, end, |handle, uuid| {
+            if let Some(cb) = cfg.callbacks.on_descriptor {
+                let raw = uuid.as_raw();
+                cb(handle, raw.as_ptr(), raw.len() as u8, cfg.user);
+            }
+            core::ops::ControlFlow::<()>::Continue(())
+        })
+        .await;
 }
 
 /// Run a central connection: the GATT client, plus (when l2cap is enabled and a

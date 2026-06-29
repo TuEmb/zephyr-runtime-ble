@@ -164,6 +164,8 @@ runtime_ble_scan_stop();
 runtime_ble_connect_addr(addr, RUNTIME_BLE_ADDR_RANDOM);
                                         // or config.peer_address to auto-connect
 runtime_ble_client_discover(svc, 16);   // -> on_discovered(handle, …)
+runtime_ble_client_discover_descriptors(start, end);
+                                        // -> on_descriptor(handle, uuid, …)
 runtime_ble_client_subscribe(handle);   // -> on_notification(handle, …)
 runtime_ble_client_write(handle, buf, n);
 runtime_ble_client_write_no_rsp(handle, buf, n);

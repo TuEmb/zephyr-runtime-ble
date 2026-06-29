@@ -79,6 +79,12 @@ static void on_discovered(uint16_t h, const uint8_t *uuid, uint8_t ul, uint16_t 
 	discovered++;
 	printk("[app] discovered characteristic #%d handle=%u\n", discovered, h);
 }
+static void on_descriptor(uint16_t h, const uint8_t *uuid, uint8_t ul, void *u)
+{
+	ARG_UNUSED(u);
+	printk("[app] descriptor handle=%u uuid_len=%u uuid0=0x%02x\n",
+	       h, ul, ul > 0 ? uuid[0] : 0);
+}
 static void on_notification(uint16_t h, const uint8_t *d, size_t n, void *u)
 {
 	ARG_UNUSED(u);
@@ -105,6 +111,7 @@ int main(void)
 			.on_disconnected = on_disconnected,
 			.on_scan_result_ext = on_scan_result_ext,
 			.on_discovered = on_discovered,
+			.on_descriptor = on_descriptor,
 			.on_notification = on_notification,
 			.on_read = on_read,
 			.on_log = on_log,
@@ -137,6 +144,9 @@ int main(void)
 	k_sleep(K_MSEC(1000));
 
 	if (discovered >= 2) {
+		printk("[app] discovering TX descriptors near handle=%u\n", tx_handle);
+		runtime_ble_client_discover_descriptors(tx_handle + 1, tx_handle + 4);
+		k_sleep(K_MSEC(500));
 		printk("[app] subscribe TX handle=%u\n", tx_handle);
 		runtime_ble_client_subscribe(tx_handle);
 		k_sleep(K_MSEC(500));

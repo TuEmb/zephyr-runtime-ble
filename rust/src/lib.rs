@@ -93,6 +93,9 @@ pub struct RuntimeBleCallbacks {
     pub on_discovered: Option<
         extern "C" fn(handle: u16, uuid: *const u8, uuid_len: u8, props: u16, user: *mut c_void),
     >,
+    /// Central: a descriptor found by runtime_ble_client_discover_descriptors.
+    pub on_descriptor:
+        Option<extern "C" fn(handle: u16, uuid: *const u8, uuid_len: u8, user: *mut c_void)>,
     /// Central: value returned by runtime_ble_client_read.
     pub on_read: Option<extern "C" fn(handle: u16, data: *const u8, len: usize, user: *mut c_void)>,
     /// Central: a notification/indication from a subscribed characteristic.
@@ -264,6 +267,7 @@ pub(crate) const CCMD_READ: u32 = 6;
 pub(crate) const CCMD_WRITE: u32 = 7;
 pub(crate) const CCMD_SUBSCRIBE: u32 = 8;
 pub(crate) const CCMD_WRITE_NO_RSP: u32 = 9;
+pub(crate) const CCMD_DISCOVER_DESCRIPTORS: u32 = 10;
 pub(crate) static CENTRAL_CMD: AtomicU32 = AtomicU32::new(CCMD_NONE);
 /// Attribute handle (read/write/subscribe) for the pending command.
 pub(crate) static CENTRAL_HANDLE: AtomicU32 = AtomicU32::new(0);
@@ -559,6 +563,20 @@ pub extern "C" fn runtime_ble_client_discover(uuid: *const u8, uuid_len: u8) -> 
 #[no_mangle]
 pub extern "C" fn runtime_ble_client_read(handle: u16) -> c_int {
     central_cmd(CCMD_READ, handle as u32)
+}
+
+#[no_mangle]
+pub extern "C" fn runtime_ble_client_discover_descriptors(
+    start_handle: u16,
+    end_handle: u16,
+) -> c_int {
+    if start_handle == 0 || end_handle < start_handle {
+        return RUNTIME_BLE_ERR_INVALID;
+    }
+    central_cmd(
+        CCMD_DISCOVER_DESCRIPTORS,
+        ((start_handle as u32) << 16) | end_handle as u32,
+    )
 }
 
 fn central_write(cmd: u32, handle: u16, data: *const u8, len: usize) -> c_int {

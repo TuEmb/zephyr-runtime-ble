@@ -137,6 +137,9 @@ typedef struct {
 	/* A characteristic found by runtime_ble_client_discover() (uuid is LE). */
 	void (*on_discovered)(uint16_t handle, const uint8_t *uuid, uint8_t uuid_len,
 			      uint16_t props, void *user);
+	/* A descriptor found by runtime_ble_client_discover_descriptors() (uuid is LE). */
+	void (*on_descriptor)(uint16_t handle, const uint8_t *uuid, uint8_t uuid_len,
+			      void *user);
 	/* Value returned by runtime_ble_client_read(). */
 	void (*on_read)(uint16_t handle, const uint8_t *data, size_t len, void *user);
 	/* A notification/indication from a subscribed characteristic. */
@@ -323,6 +326,9 @@ int runtime_ble_disconnect(void);
 /* Discover the characteristics of a service (16- or 128-bit UUID, LE bytes).
  * Each characteristic found is reported via on_discovered. */
 int runtime_ble_client_discover(const uint8_t *svc_uuid, uint8_t uuid_len);
+
+/* Discover descriptors by handle range. Each descriptor is reported via on_descriptor. */
+int runtime_ble_client_discover_descriptors(uint16_t start_handle, uint16_t end_handle);
 
 /* Read a characteristic by attribute handle; the value arrives via on_read. */
 int runtime_ble_client_read(uint16_t handle);
