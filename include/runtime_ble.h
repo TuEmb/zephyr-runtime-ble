@@ -287,6 +287,12 @@ typedef struct {
 	 * kind is RUNTIME_BLE_ADDR_*; zero/default keeps the historic random type. */
 	const uint8_t          *peer_address;
 	uint8_t                 peer_address_kind;
+	/* Central only: initial connection parameters used by connect/create-connection.
+	 * Zero values keep the runtime defaults (80 ms interval, latency 0, 8 s timeout). */
+	uint16_t                central_conn_min_interval_ms;
+	uint16_t                central_conn_max_interval_ms;
+	uint16_t                central_conn_latency;
+	uint16_t                central_conn_timeout_ms;
 	/* L2CAP connection-oriented channel PSM (0 = disabled). Once connected, a
 	 * peripheral listens on it and a central opens it. Needs a l2cap-capable
 	 * lib (CONFIG_RUNTIME_BLE_L2CAP=y). */

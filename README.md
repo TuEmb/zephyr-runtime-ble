@@ -199,6 +199,10 @@ runtime_ble_client_write(handle, buf, n);
 runtime_ble_client_write_no_rsp(handle, buf, n);
 runtime_ble_client_read(handle);        // -> on_read(handle, …)
 ```
+Set `central_conn_min_interval_ms`, `central_conn_max_interval_ms`,
+`central_conn_latency`, and `central_conn_timeout_ms` to tune the initial LE
+connection parameters used by the central create-connection procedure; zero
+values keep the runtime defaults.
 Use `on_scan_result_ext` when the central needs the peer's address type; pass
 that value to `runtime_ble_connect_addr()` or `config.peer_address_kind`.
 Use `on_scan_result_meta` when the scanner also needs report metadata such as

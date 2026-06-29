@@ -471,6 +471,39 @@ fn peer_address(addr: [u8; 6], kind: u8) -> Address {
     Address::new(c_addr_kind(kind), BdAddr::new(addr))
 }
 
+#[cfg(feature = "central")]
+fn central_connect_params(cfg: &RuntimeCfg) -> RequestedConnParams {
+    let min_ms = cfg.central_conn_min_interval_ms;
+    let max_ms = cfg.central_conn_max_interval_ms;
+    let timeout_ms = cfg.central_conn_timeout_ms;
+    let params = RequestedConnParams {
+        min_connection_interval: Duration::from_millis(if min_ms == 0 {
+            80
+        } else {
+            min_ms as u64
+        }),
+        max_connection_interval: Duration::from_millis(if max_ms == 0 {
+            80
+        } else {
+            max_ms as u64
+        }),
+        max_latency: cfg.central_conn_latency,
+        min_event_length: Duration::from_secs(0),
+        max_event_length: Duration::from_secs(0),
+        supervision_timeout: Duration::from_millis(if timeout_ms == 0 {
+            8000
+        } else {
+            timeout_ms as u64
+        }),
+    };
+    if params.is_valid() {
+        params
+    } else {
+        log_str(cfg, "[central] invalid connect params\0");
+        RequestedConnParams::default()
+    }
+}
+
 fn legacy_adv_flags(kind: LeAdvEventKind) -> u16 {
     match kind {
         LeAdvEventKind::AdvInd => SCAN_F_CONNECTABLE | SCAN_F_SCANNABLE | SCAN_F_LEGACY,
@@ -1222,7 +1255,7 @@ async fn central_loop(
                 filter_accept_list: &filt,
                 ..Default::default()
             },
-            connect_params: Default::default(),
+            connect_params: central_connect_params(cfg),
         };
         log_str(cfg, "[central] connecting\0");
         match central.connect(&cc).await {
