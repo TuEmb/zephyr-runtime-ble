@@ -811,6 +811,16 @@ pub extern "C" fn runtime_ble_client_read_blob(handle: u16, offset: u16) -> c_in
 }
 
 #[no_mangle]
+pub extern "C" fn runtime_ble_client_read_descriptor(handle: u16) -> c_int {
+    runtime_ble_client_read(handle)
+}
+
+#[no_mangle]
+pub extern "C" fn runtime_ble_client_read_descriptor_blob(handle: u16, offset: u16) -> c_int {
+    runtime_ble_client_read_blob(handle, offset)
+}
+
+#[no_mangle]
 pub extern "C" fn runtime_ble_client_discover_descriptors(
     start_handle: u16,
     end_handle: u16,
@@ -855,6 +865,15 @@ pub extern "C" fn runtime_ble_client_write_no_rsp(
     len: usize,
 ) -> c_int {
     central_write(CCMD_WRITE_NO_RSP, handle, data, len)
+}
+
+#[no_mangle]
+pub extern "C" fn runtime_ble_client_write_descriptor(
+    handle: u16,
+    data: *const u8,
+    len: usize,
+) -> c_int {
+    runtime_ble_client_write(handle, data, len)
 }
 
 #[no_mangle]

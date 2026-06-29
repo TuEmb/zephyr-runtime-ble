@@ -80,6 +80,19 @@ ZTEST(runtime_ble_edge, test_central_read_blob_requires_central_lib)
 		      "default peripheral lib must reject central read blob");
 }
 
+ZTEST(runtime_ble_edge, test_central_descriptor_access_requires_central_lib)
+{
+	const uint8_t buf[2] = {0x01, 0x00};
+
+	zassert_equal(runtime_ble_client_read_descriptor(1), RUNTIME_BLE_ERR_INVALID,
+		      "default peripheral lib must reject descriptor read");
+	zassert_equal(runtime_ble_client_read_descriptor_blob(1, 4), RUNTIME_BLE_ERR_INVALID,
+		      "default peripheral lib must reject descriptor read blob");
+	zassert_equal(runtime_ble_client_write_descriptor(1, buf, sizeof(buf)),
+		      RUNTIME_BLE_ERR_INVALID,
+		      "default peripheral lib must reject descriptor write");
+}
+
 ZTEST(runtime_ble_edge, test_central_discover_all_requires_central_lib)
 {
 	zassert_equal(runtime_ble_client_discover_all(), RUNTIME_BLE_ERR_INVALID,

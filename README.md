@@ -226,6 +226,8 @@ runtime_ble_client_write(handle, buf, n);
 runtime_ble_client_write_no_rsp(handle, buf, n);
 runtime_ble_client_read(handle);        // -> on_read(handle, …)
 runtime_ble_client_read_blob(handle, off);
+runtime_ble_client_read_descriptor(desc_handle);
+runtime_ble_client_write_descriptor(desc_handle, buf, n);
                                         // long reads from an ATT offset
 ```
 Set `central_conn_min_interval_ms`, `central_conn_max_interval_ms`,
@@ -250,6 +252,8 @@ instead of notifications; both deliver incoming values via `on_notification`.
 Incoming client indications are confirmed automatically after the callback runs.
 Use `runtime_ble_client_read_blob()` to continue reading long attributes from a
 specific ATT offset; returned bytes still arrive through `on_read`.
+Use the descriptor read/write helpers when `on_descriptor` has reported a
+descriptor handle; descriptor reads also return through `on_read`.
 See [`examples/gatt_client/`](examples/gatt_client/) (HW-verified
 against the peripheral echo example). The role is feature-gated so peripheral-
 only apps stay on the lean default lib (see [`rust/README.md`](rust/README.md)).

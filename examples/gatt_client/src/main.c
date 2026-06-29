@@ -30,7 +30,7 @@ static const uint8_t svc_uuid[16] = {0x9e, 0xca, 0xdc, 0x24, 0x0e, 0xe5, 0xa9, 0
 #endif
 static const uint8_t peer[6] = {PEER0, PEER1, PEER2, PEER3, PEER4, PEER5};
 
-static volatile uint16_t rx_handle, tx_handle;
+static volatile uint16_t rx_handle, tx_handle, user_desc_handle;
 static volatile int discovered;
 static volatile int connected;
 static volatile int scan_printed;
@@ -113,6 +113,9 @@ static void on_service(uint16_t start, uint16_t end, const uint8_t *uuid, uint8_
 static void on_descriptor(uint16_t h, const uint8_t *uuid, uint8_t ul, void *u)
 {
 	ARG_UNUSED(u);
+	if (ul == 2 && uuid[0] == 0x01 && uuid[1] == 0x29) {
+		user_desc_handle = h;
+	}
 	printk("[app] descriptor handle=%u uuid_len=%u uuid0=0x%02x\n",
 	       h, ul, ul > 0 ? uuid[0] : 0);
 }
@@ -211,6 +214,11 @@ int main(void)
 		printk("[app] discovering TX descriptors near handle=%u\n", tx_handle);
 		runtime_ble_client_discover_descriptors(tx_handle + 1, tx_handle + 4);
 		k_sleep(K_MSEC(500));
+		if (user_desc_handle != 0) {
+			printk("[app] read TX user descriptor handle=%u\n", user_desc_handle);
+			runtime_ble_client_read_descriptor(user_desc_handle);
+			k_sleep(K_MSEC(500));
+		}
 		printk("[app] subscribe TX handle=%u\n", tx_handle);
 		runtime_ble_client_subscribe(tx_handle);
 		k_sleep(K_MSEC(500));
