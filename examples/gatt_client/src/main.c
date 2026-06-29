@@ -122,6 +122,18 @@ static void on_att_mtu(uint16_t att_mtu, void *u)
 	ARG_UNUSED(u);
 	printk("[app] ATT MTU %u\n", att_mtu);
 }
+static void on_frame_space(uint32_t frame_space_us, void *u)
+{
+	ARG_UNUSED(u);
+	printk("[app] frame space %u us\n", frame_space_us);
+}
+static void on_connection_rate(uint16_t interval_ms, uint16_t subrate_factor, uint16_t latency,
+			       uint16_t continuation_number, uint16_t timeout_ms, void *u)
+{
+	ARG_UNUSED(u);
+	printk("[app] connection rate interval=%u subrate=%u latency=%u cont=%u timeout=%u\n",
+	       interval_ms, subrate_factor, latency, continuation_number, timeout_ms);
+}
 
 int main(void)
 {
@@ -138,6 +150,8 @@ int main(void)
 			.on_notification = on_notification,
 			.on_read = on_read,
 			.on_att_mtu = on_att_mtu,
+			.on_frame_space = on_frame_space,
+			.on_connection_rate = on_connection_rate,
 			.on_log = on_log,
 		},
 	};

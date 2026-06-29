@@ -131,6 +131,19 @@ pub struct RuntimeBleCallbacks {
         Option<extern "C" fn(max_tx_octets: u16, max_rx_octets: u16, user: *mut c_void)>,
     /// Current negotiated ATT MTU.
     pub on_att_mtu: Option<extern "C" fn(att_mtu: u16, user: *mut c_void)>,
+    /// LE frame spacing update.
+    pub on_frame_space: Option<extern "C" fn(frame_space_us: u32, user: *mut c_void)>,
+    /// LE connection rate/subrate changed.
+    pub on_connection_rate: Option<
+        extern "C" fn(
+            interval_ms: u16,
+            subrate_factor: u16,
+            latency: u16,
+            continuation_number: u16,
+            timeout_ms: u16,
+            user: *mut c_void,
+        ),
+    >,
     /// Link RSSI read result.
     pub on_rssi: Option<extern "C" fn(rssi: i8, user: *mut c_void)>,
     /// Pairing/encryption event.

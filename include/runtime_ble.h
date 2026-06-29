@@ -180,6 +180,11 @@ typedef struct {
 				      void *user);
 	/* Current negotiated ATT MTU. Emitted after connect and on runtime_ble_read_att_mtu(). */
 	void (*on_att_mtu)(uint16_t att_mtu, void *user);
+	/* LE frame spacing / connection subrate events, when supported by controller/peer. */
+	void (*on_frame_space)(uint32_t frame_space_us, void *user);
+	void (*on_connection_rate)(uint16_t interval_ms, uint16_t subrate_factor,
+				   uint16_t latency, uint16_t continuation_number,
+				   uint16_t timeout_ms, void *user);
 	/* Result of runtime_ble_read_rssi() on the active link. */
 	void (*on_rssi)(int8_t rssi, void *user);
 	/* Pairing/encryption event. `event` is RUNTIME_BLE_SECURITY_*; `level`

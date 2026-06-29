@@ -1536,6 +1536,29 @@ async fn central_connection_events(
                         cb(max_tx_octets, max_rx_octets, cfg.user);
                     }
                 }
+                ConnectionEvent::FrameSpaceUpdated { frame_space, .. } => {
+                    if let Some(cb) = cfg.callbacks.on_frame_space {
+                        cb(frame_space.as_micros().min(u32::MAX as u64) as u32, cfg.user);
+                    }
+                }
+                ConnectionEvent::ConnectionRateChanged {
+                    conn_interval,
+                    subrate_factor,
+                    peripheral_latency,
+                    continuation_number,
+                    supervision_timeout,
+                } => {
+                    if let Some(cb) = cfg.callbacks.on_connection_rate {
+                        cb(
+                            conn_interval.as_millis().min(u16::MAX as u64) as u16,
+                            subrate_factor,
+                            peripheral_latency,
+                            continuation_number,
+                            supervision_timeout.as_millis().min(u16::MAX as u64) as u16,
+                            cfg.user,
+                        );
+                    }
+                }
                 ConnectionEvent::PassKeyDisplay(key) => {
                     emit_security_event(
                         cfg,
@@ -1618,7 +1641,6 @@ async fn central_connection_events(
                         log_str(cfg, "[security] OOB data requested\0");
                     }
                 }
-                _ => {}
             },
             Either::Second(()) => {}
         }
@@ -2024,6 +2046,29 @@ async fn connection_task(
                         cb(max_tx_octets, max_rx_octets, cfg.user);
                     }
                 }
+                GattConnectionEvent::FrameSpaceUpdated { frame_space, .. } => {
+                    if let Some(cb) = cfg.callbacks.on_frame_space {
+                        cb(frame_space.as_micros().min(u32::MAX as u64) as u32, cfg.user);
+                    }
+                }
+                GattConnectionEvent::ConnectionRateChanged {
+                    conn_interval,
+                    subrate_factor,
+                    peripheral_latency,
+                    continuation_number,
+                    supervision_timeout,
+                } => {
+                    if let Some(cb) = cfg.callbacks.on_connection_rate {
+                        cb(
+                            conn_interval.as_millis().min(u16::MAX as u64) as u16,
+                            subrate_factor,
+                            peripheral_latency,
+                            continuation_number,
+                            supervision_timeout.as_millis().min(u16::MAX as u64) as u16,
+                            cfg.user,
+                        );
+                    }
+                }
                 GattConnectionEvent::PassKeyDisplay(key) => {
                     emit_security_event(
                         cfg,
@@ -2183,7 +2228,6 @@ async fn connection_task(
                         }
                     }
                 },
-                _ => {}
             }
         }
     };
