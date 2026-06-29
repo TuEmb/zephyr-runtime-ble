@@ -49,7 +49,7 @@ use trouble_host::{BondInformation, Identity, IdentityResolvingKey, LongTermKey,
 
 use crate::{
     RuntimeBleCharDef, RuntimeCfg, NUS_TX_CHR, SEND_BUF, SEND_BUF_CAP, SEND_CHR, SEND_LEN,
-    SEND_REQ, UNLOAD_REQ,
+    SEND_KIND, SEND_KIND_INDICATE, SEND_REQ, UNLOAD_REQ,
 };
 #[cfg(feature = "central")]
 use crate::{
@@ -2381,6 +2381,7 @@ async fn connection_task(
         loop {
             if SEND_REQ.load(Ordering::Acquire) {
                 let chr = SEND_CHR.load(Ordering::Acquire);
+                let kind = SEND_KIND.load(Ordering::Acquire);
                 let target = if chr == NUS_TX_CHR { gatt.nus_tx } else { chr };
                 let len = SEND_LEN
                     .load(Ordering::Acquire)
@@ -2397,7 +2398,11 @@ async fn connection_task(
                 SEND_REQ.store(false, Ordering::Release);
                 if let Some(c) = gatt.chars.get(target) {
                     let props = gatt.props.get(target).copied().unwrap_or(0);
-                    if props & C_PROP_NOTIFY != 0 {
+                    if kind == SEND_KIND_INDICATE {
+                        if props & C_PROP_INDICATE != 0 {
+                            let _ = c.indicate_raw(&gconn, &txbuf[..len], false).await;
+                        }
+                    } else if props & C_PROP_NOTIFY != 0 {
                         let _ = c.notify_raw(&gconn, &txbuf[..len], false).await;
                     } else if props & C_PROP_INDICATE != 0 {
                         let _ = c.indicate_raw(&gconn, &txbuf[..len], false).await;

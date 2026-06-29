@@ -52,6 +52,16 @@ ZTEST(runtime_ble_edge, test_send_argument_validation)
 	zassert_equal(runtime_ble_send(buf, 100000), RUNTIME_BLE_ERR_INVALID, "oversized length");
 }
 
+ZTEST(runtime_ble_edge, test_indicate_argument_validation)
+{
+	const uint8_t buf[4] = {1, 2, 3, 4};
+
+	zassert_equal(runtime_ble_indicate(0, NULL, 4), RUNTIME_BLE_ERR_INVALID, "NULL data");
+	zassert_equal(runtime_ble_indicate(0, buf, 0), RUNTIME_BLE_ERR_INVALID, "zero length");
+	zassert_equal(runtime_ble_indicate(0, buf, 100000), RUNTIME_BLE_ERR_INVALID,
+		      "oversized length");
+}
+
 ZTEST(runtime_ble_edge, test_security_argument_validation)
 {
 	zassert_equal(runtime_ble_passkey_input(1000000), RUNTIME_BLE_ERR_INVALID,
@@ -123,6 +133,17 @@ ZTEST(runtime_ble_edge, test_notify_unknown_characteristic)
 
 	zassert_equal(runtime_ble_notify(0xFFFE, buf, sizeof(buf)), RUNTIME_BLE_OK,
 		      "notify to an unknown characteristic should queue without error");
+
+	test_load_settled();
+	zassert_equal(runtime_ble_unload(), RUNTIME_BLE_OK, "cleanup unload failed");
+}
+
+ZTEST(runtime_ble_edge, test_indicate_unknown_characteristic)
+{
+	const uint8_t buf[2] = {0xAB, 0xCD};
+
+	zassert_equal(runtime_ble_indicate(0xFFFE, buf, sizeof(buf)), RUNTIME_BLE_OK,
+		      "indicate to an unknown characteristic should queue without error");
 
 	test_load_settled();
 	zassert_equal(runtime_ble_unload(), RUNTIME_BLE_OK, "cleanup unload failed");

@@ -340,6 +340,10 @@ int runtime_ble_send(const uint8_t *data, size_t len);
  * RUNTIME_BLE_PROP_NOTIFY or _INDICATE. Returns RUNTIME_BLE_OK or an error. */
 int runtime_ble_notify(uint16_t chr, const uint8_t *data, size_t len);
 
+/* Indicate a user-defined characteristic `chr` (flat 0-based index). The
+ * characteristic must have RUNTIME_BLE_PROP_INDICATE. */
+int runtime_ble_indicate(uint16_t chr, const uint8_t *data, size_t len);
+
 /* Request a link PHY update on the active connection. phy is RUNTIME_BLE_PHY_*. */
 int runtime_ble_set_phy(uint8_t phy);
 

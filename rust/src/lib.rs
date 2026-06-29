@@ -322,6 +322,10 @@ pub(crate) const SEND_BUF_CAP: usize = 512;
 pub(crate) static mut SEND_BUF: [u8; SEND_BUF_CAP] = [0; SEND_BUF_CAP];
 /// Target characteristic for the queued TX: a flat index, or NUS_TX_CHR.
 pub(crate) static SEND_CHR: AtomicUsize = AtomicUsize::new(NUS_TX_CHR);
+/// TX mode: automatic notify-or-indicate selection, or explicit indication.
+pub(crate) const SEND_KIND_AUTO: usize = 0;
+pub(crate) const SEND_KIND_INDICATE: usize = 1;
+pub(crate) static SEND_KIND: AtomicUsize = AtomicUsize::new(SEND_KIND_AUTO);
 /// Sentinel meaning "the built-in NUS TX characteristic".
 pub(crate) const NUS_TX_CHR: usize = usize::MAX;
 
@@ -463,7 +467,7 @@ pub extern "C" fn runtime_ble_signal_unload() {
 }
 
 /// Queue one outstanding TX to characteristic `chr`. Single outstanding.
-fn queue_tx(chr: usize, data: *const u8, len: usize) -> c_int {
+fn queue_tx(chr: usize, kind: usize, data: *const u8, len: usize) -> c_int {
     if data.is_null() || len == 0 || len > SEND_BUF_CAP {
         return RUNTIME_BLE_ERR_INVALID;
     }
@@ -474,6 +478,7 @@ fn queue_tx(chr: usize, data: *const u8, len: usize) -> c_int {
         core::ptr::copy_nonoverlapping(data, core::ptr::addr_of_mut!(SEND_BUF) as *mut u8, len);
     }
     SEND_CHR.store(chr, Ordering::Release);
+    SEND_KIND.store(kind, Ordering::Release);
     SEND_LEN.store(len, Ordering::Release);
     SEND_REQ.store(true, Ordering::Release);
     RUNTIME_BLE_OK
@@ -482,14 +487,20 @@ fn queue_tx(chr: usize, data: *const u8, len: usize) -> c_int {
 /// Queue one notification on the built-in NUS TX characteristic.
 #[no_mangle]
 pub extern "C" fn runtime_ble_send(data: *const u8, len: usize) -> c_int {
-    queue_tx(NUS_TX_CHR, data, len)
+    queue_tx(NUS_TX_CHR, SEND_KIND_AUTO, data, len)
 }
 
 /// Queue one notification/indication on a user-defined characteristic `chr`
 /// (flat index in declaration order across config.services).
 #[no_mangle]
 pub extern "C" fn runtime_ble_notify(chr: u16, data: *const u8, len: usize) -> c_int {
-    queue_tx(chr as usize, data, len)
+    queue_tx(chr as usize, SEND_KIND_AUTO, data, len)
+}
+
+/// Queue one indication on a user-defined characteristic `chr`.
+#[no_mangle]
+pub extern "C" fn runtime_ble_indicate(chr: u16, data: *const u8, len: usize) -> c_int {
+    queue_tx(chr as usize, SEND_KIND_INDICATE, data, len)
 }
 
 fn link_cmd(cmd: u32) -> c_int {

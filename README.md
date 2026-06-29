@@ -129,6 +129,7 @@ static const runtime_ble_config_t cfg = {
 runtime_ble_init(&cfg);
 runtime_ble_load();              // bring radio up + advertise
 runtime_ble_notify(1, buf, n);   // notify characteristic #1 (TX)
+runtime_ble_indicate(1, buf, n); // force an ATT indication when supported
 runtime_ble_read_rssi();         // -> on_rssi(rssi)
 runtime_ble_set_phy(RUNTIME_BLE_PHY_2M);       // or RUNTIME_BLE_PHY_CODED
 runtime_ble_update_data_length(251, 2120);
@@ -154,6 +155,11 @@ when a peer writes a CCCD, `on_conn_params`, `on_phy_update`,
 `on_rssi`, `on_security_event`, `on_bond_load`, `on_bond_store`,
 `on_oob_request`, `on_oob_local_data`, `on_log`. They run on the BLE thread —
 keep them short.
+
+Use `runtime_ble_indicate()` when a characteristic advertises
+`RUNTIME_BLE_PROP_INDICATE` and the app needs ATT confirmation semantics. The
+older `runtime_ble_notify()` keeps its auto behavior: notify if available,
+otherwise indicate.
 
 On an active link, applications can request PHY, data length, classic
 connection-parameter, frame-spacing, and connection-rate/subrate updates with
