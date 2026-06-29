@@ -202,6 +202,7 @@ runtime_ble_scan_start_ex(1, 100, 50, 0,
 runtime_ble_scan_stop();
 runtime_ble_connect_addr(addr, RUNTIME_BLE_ADDR_RANDOM);
                                         // or config.peer_address to auto-connect
+runtime_ble_client_discover_all();      // -> on_discovered(handle, …)
 runtime_ble_client_discover(svc, 16);   // -> on_discovered(handle, …)
 runtime_ble_client_discover_descriptors(start, end);
                                         // -> on_descriptor(handle, uuid, …)
@@ -225,6 +226,8 @@ connectable/scannable, scan-response, legacy/extended, PHY, TX power, and SID.
 Use `runtime_ble_scan_start_ex()` to enable controller duplicate filtering,
 select scan PHYs (1M, 2M, coded), or limit scan reports to one peer address
 with the controller accept list.
+Use `runtime_ble_client_discover_all()` when the central does not know the
+target service UUID up front; discovered characteristics still use `on_discovered`.
 Use `runtime_ble_client_subscribe_indicate()` for peers that expose indications
 instead of notifications; both deliver incoming values via `on_notification`.
 Use `runtime_ble_client_read_blob()` to continue reading long attributes from a

@@ -425,6 +425,10 @@ int runtime_ble_disconnect(void);
  * Each characteristic found is reported via on_discovered. */
 int runtime_ble_client_discover(const uint8_t *svc_uuid, uint8_t uuid_len);
 
+/* Discover characteristics across all primary services; each characteristic found is reported
+ * via on_discovered. */
+int runtime_ble_client_discover_all(void);
+
 /* Discover descriptors by handle range. Each descriptor is reported via on_descriptor. */
 int runtime_ble_client_discover_descriptors(uint16_t start_handle, uint16_t end_handle);
 
