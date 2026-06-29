@@ -181,6 +181,8 @@ runtime_ble_client_read(handle);        // -> on_read(handle, …)
 ```
 Use `on_scan_result_ext` when the central needs the peer's address type; pass
 that value to `runtime_ble_connect_addr()` or `config.peer_address_kind`.
+Use `on_scan_result_meta` when the scanner also needs report metadata such as
+connectable/scannable, scan-response, legacy/extended, PHY, TX power, and SID.
 See [`examples/gatt_client/`](examples/gatt_client/) (HW-verified
 against the peripheral echo example). The role is feature-gated so peripheral-
 only apps stay on the lean default lib (see [`rust/README.md`](rust/README.md)).

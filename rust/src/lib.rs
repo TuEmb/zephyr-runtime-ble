@@ -89,6 +89,22 @@ pub struct RuntimeBleCallbacks {
             user: *mut c_void,
         ),
     >,
+    /// Central: scan report with address type and metadata flags.
+    pub on_scan_result_meta: Option<
+        extern "C" fn(
+            addr: *const u8,
+            addr_kind: u8,
+            rssi: i8,
+            adv: *const u8,
+            adv_len: usize,
+            flags: u16,
+            primary_phy: u8,
+            secondary_phy: u8,
+            tx_power_dbm: i8,
+            sid: u8,
+            user: *mut c_void,
+        ),
+    >,
     /// Central: a characteristic found by runtime_ble_client_discover.
     pub on_discovered: Option<
         extern "C" fn(handle: u16, uuid: *const u8, uuid_len: u8, props: u16, user: *mut c_void),

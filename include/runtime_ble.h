@@ -55,6 +55,16 @@ extern "C" {
 /* PHY selector for runtime_ble_set_phy(). */
 #define RUNTIME_BLE_PHY_1M 1
 #define RUNTIME_BLE_PHY_2M 2
+#define RUNTIME_BLE_PHY_CODED 3
+
+/* Scan report metadata flags for on_scan_result_meta(). */
+#define RUNTIME_BLE_SCAN_F_CONNECTABLE     (1u << 0)
+#define RUNTIME_BLE_SCAN_F_SCANNABLE       (1u << 1)
+#define RUNTIME_BLE_SCAN_F_DIRECTED        (1u << 2)
+#define RUNTIME_BLE_SCAN_F_SCAN_RESPONSE   (1u << 3)
+#define RUNTIME_BLE_SCAN_F_LEGACY          (1u << 4)
+#define RUNTIME_BLE_SCAN_F_DATA_INCOMPLETE (1u << 5)
+#define RUNTIME_BLE_SCAN_F_DATA_TRUNCATED  (1u << 6)
 
 /* Security event codes for on_security_event(). */
 #define RUNTIME_BLE_SECURITY_PASSKEY_DISPLAY  1
@@ -134,6 +144,13 @@ typedef struct {
 	/* Advertising report with address type (RUNTIME_BLE_ADDR_*). */
 	void (*on_scan_result_ext)(const uint8_t *addr, uint8_t addr_kind, int8_t rssi,
 				   const uint8_t *adv, size_t adv_len, void *user);
+	/* Advertising report with report metadata. flags is RUNTIME_BLE_SCAN_F_*;
+	 * phy values are RUNTIME_BLE_PHY_* (0 unknown); tx_power_dbm uses 127
+	 * when unavailable; sid uses 0xff when unavailable. */
+	void (*on_scan_result_meta)(const uint8_t *addr, uint8_t addr_kind, int8_t rssi,
+				    const uint8_t *adv, size_t adv_len, uint16_t flags,
+				    uint8_t primary_phy, uint8_t secondary_phy,
+				    int8_t tx_power_dbm, uint8_t sid, void *user);
 	/* A characteristic found by runtime_ble_client_discover() (uuid is LE). */
 	void (*on_discovered)(uint16_t handle, const uint8_t *uuid, uint8_t uuid_len,
 			      uint16_t props, void *user);

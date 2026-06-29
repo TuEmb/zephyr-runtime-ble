@@ -65,6 +65,23 @@ static void on_scan_result_ext(const uint8_t *addr, uint8_t kind, int8_t rssi, c
 		scan_printed++;
 	}
 }
+static void on_scan_result_meta(const uint8_t *addr, uint8_t kind, int8_t rssi,
+				const uint8_t *adv, size_t adv_len, uint16_t flags,
+				uint8_t primary_phy, uint8_t secondary_phy,
+				int8_t tx_power_dbm, uint8_t sid, void *u)
+{
+	ARG_UNUSED(u);
+	ARG_UNUSED(adv);
+	if (scan_printed < 8) {
+		printk("[scan] %s %02x:%02x:%02x:%02x:%02x:%02x rssi=%d len=%u "
+		       "flags=0x%04x phy=%u/%u tx=%d sid=0x%02x\n",
+		       kind == RUNTIME_BLE_ADDR_PUBLIC ? "public" : "random",
+		       addr[5], addr[4], addr[3], addr[2], addr[1], addr[0],
+		       rssi, (unsigned int)adv_len, flags, primary_phy,
+		       secondary_phy, tx_power_dbm, sid);
+		scan_printed++;
+	}
+}
 static void on_discovered(uint16_t h, const uint8_t *uuid, uint8_t ul, uint16_t props, void *u)
 {
 	ARG_UNUSED(u);
@@ -110,6 +127,7 @@ int main(void)
 			.on_connected = on_connected,
 			.on_disconnected = on_disconnected,
 			.on_scan_result_ext = on_scan_result_ext,
+			.on_scan_result_meta = on_scan_result_meta,
 			.on_discovered = on_discovered,
 			.on_descriptor = on_descriptor,
 			.on_notification = on_notification,

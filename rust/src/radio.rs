@@ -16,7 +16,7 @@ use core::pin::pin;
 use core::sync::atomic::Ordering;
 use core::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 
-use bt_hci::param::{AddrKind, BdAddr};
+use bt_hci::param::{AddrKind, BdAddr, LeAdvEventKind, LeExtAdvDataStatus};
 use bt_hci::uuid::BluetoothUuid16;
 use embassy_futures::join::join;
 #[cfg(feature = "central")]
@@ -434,6 +434,13 @@ pub(crate) fn device_address(cfg: &RuntimeCfg) -> Address {
 
 const RTBLE_ADDR_RANDOM: u8 = 0;
 const RTBLE_ADDR_PUBLIC: u8 = 1;
+const SCAN_F_CONNECTABLE: u16 = 1 << 0;
+const SCAN_F_SCANNABLE: u16 = 1 << 1;
+const SCAN_F_DIRECTED: u16 = 1 << 2;
+const SCAN_F_SCAN_RESPONSE: u16 = 1 << 3;
+const SCAN_F_LEGACY: u16 = 1 << 4;
+const SCAN_F_DATA_INCOMPLETE: u16 = 1 << 5;
+const SCAN_F_DATA_TRUNCATED: u16 = 1 << 6;
 
 fn c_addr_kind(kind: u8) -> AddrKind {
     if kind == RTBLE_ADDR_PUBLIC {
@@ -453,6 +460,25 @@ fn addr_kind_to_c(kind: AddrKind) -> u8 {
 
 fn peer_address(addr: [u8; 6], kind: u8) -> Address {
     Address::new(c_addr_kind(kind), BdAddr::new(addr))
+}
+
+fn legacy_adv_flags(kind: LeAdvEventKind) -> u16 {
+    match kind {
+        LeAdvEventKind::AdvInd => SCAN_F_CONNECTABLE | SCAN_F_SCANNABLE | SCAN_F_LEGACY,
+        LeAdvEventKind::AdvDirectInd => SCAN_F_CONNECTABLE | SCAN_F_DIRECTED | SCAN_F_LEGACY,
+        LeAdvEventKind::AdvScanInd => SCAN_F_SCANNABLE | SCAN_F_LEGACY,
+        LeAdvEventKind::AdvNonconnInd => SCAN_F_LEGACY,
+        LeAdvEventKind::ScanRsp => SCAN_F_SCAN_RESPONSE | SCAN_F_LEGACY,
+    }
+}
+
+fn ext_data_status_flags(status: LeExtAdvDataStatus) -> u16 {
+    match status {
+        LeExtAdvDataStatus::Complete => 0,
+        LeExtAdvDataStatus::IncompleteMoreExpected => SCAN_F_DATA_INCOMPLETE,
+        LeExtAdvDataStatus::IncompleteTruncated => SCAN_F_DATA_TRUNCATED,
+        LeExtAdvDataStatus::Reserved => SCAN_F_DATA_INCOMPLETE,
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -536,6 +562,21 @@ impl trouble_host::prelude::EventHandler for RtEventHandler<'_> {
     fn on_adv_reports(&self, reports: trouble_host::prelude::LeAdvReportsIter) {
         for report in reports {
             let Ok(report) = report else { continue };
+            if let Some(cb) = self.cfg.callbacks.on_scan_result_meta {
+                cb(
+                    report.addr.raw().as_ptr(),
+                    addr_kind_to_c(report.addr_kind),
+                    report.rssi,
+                    report.data.as_ptr(),
+                    report.data.len(),
+                    legacy_adv_flags(report.event_kind),
+                    1,
+                    0,
+                    127,
+                    0xff,
+                    self.cfg.user,
+                );
+            }
             if let Some(cb) = self.cfg.callbacks.on_scan_result_ext {
                 cb(
                     report.addr.raw().as_ptr(),
@@ -561,6 +602,37 @@ impl trouble_host::prelude::EventHandler for RtEventHandler<'_> {
     fn on_ext_adv_reports(&self, reports: trouble_host::prelude::LeExtAdvReportsIter) {
         for report in reports {
             let Ok(report) = report else { continue };
+            if let Some(cb) = self.cfg.callbacks.on_scan_result_meta {
+                let mut flags = ext_data_status_flags(report.event_kind.data_status());
+                if report.event_kind.connectable() {
+                    flags |= SCAN_F_CONNECTABLE;
+                }
+                if report.event_kind.scannable() {
+                    flags |= SCAN_F_SCANNABLE;
+                }
+                if report.event_kind.directed() {
+                    flags |= SCAN_F_DIRECTED;
+                }
+                if report.event_kind.scan_response() {
+                    flags |= SCAN_F_SCAN_RESPONSE;
+                }
+                if report.event_kind.legacy() {
+                    flags |= SCAN_F_LEGACY;
+                }
+                cb(
+                    report.addr.raw().as_ptr(),
+                    addr_kind_to_c(report.addr_kind),
+                    report.rssi,
+                    report.data.as_ptr(),
+                    report.data.len(),
+                    flags,
+                    phy_to_c(report.primary_adv_phy),
+                    report.secondary_adv_phy.map_or(0, phy_to_c),
+                    report.tx_power,
+                    report.adv_sid,
+                    self.cfg.user,
+                );
+            }
             if let Some(cb) = self.cfg.callbacks.on_scan_result_ext {
                 cb(
                     report.addr.raw().as_ptr(),
@@ -614,8 +686,9 @@ async fn run_connection(
 
 fn phy_to_c(phy: trouble_host::prelude::PhyKind) -> u8 {
     match phy {
+        trouble_host::prelude::PhyKind::Le1M => 1,
         trouble_host::prelude::PhyKind::Le2M => 2,
-        _ => 1,
+        trouble_host::prelude::PhyKind::LeCoded | trouble_host::prelude::PhyKind::LeCodedS2 => 3,
     }
 }
 
