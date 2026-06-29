@@ -1616,8 +1616,7 @@ fn advertising_parts<'a>(
     } else {
         &[]
     };
-    let mut adv = [0u8; 31];
-    let adv_len = build_adv_payload(cfg, flags, man, name, &mut adv)
+    let (adv, adv_len) = advertising_payload(cfg, flags, man, name)
         .ok_or(BleHostError::BleHost(trouble_host::Error::InvalidValue))?;
     let scan_data: &[u8] = if !cfg.scan_response_data.is_null() && cfg.scan_response_data_len > 0 {
         unsafe {
@@ -1646,6 +1645,27 @@ fn advertising_parts<'a>(
         ..Default::default()
     };
     Ok((adv, adv_len, scan_data, adv_params))
+}
+
+fn advertising_payload(
+    cfg: &RuntimeCfg,
+    flags: u8,
+    manufacturer_data: &[u8],
+    name: &str,
+) -> Option<([u8; 31], usize)> {
+    let mut adv = [0u8; 31];
+    if !cfg.adv_data.is_null() && cfg.adv_data_len > 0 {
+        let len = cfg.adv_data_len as usize;
+        if len > adv.len() {
+            return None;
+        }
+        unsafe {
+            core::ptr::copy_nonoverlapping(cfg.adv_data, adv.as_mut_ptr(), len);
+        }
+        return Some((adv, len));
+    }
+    let adv_len = build_adv_payload(cfg, flags, manufacturer_data, name, &mut adv)?;
+    Some((adv, adv_len))
 }
 
 fn adv_tx_power(cfg: &RuntimeCfg) -> TxPower {

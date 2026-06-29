@@ -2,7 +2,7 @@
  * runtime-ble example: a fully user-defined BLE peripheral.
  *
  * Everything is configured from this app — no Rust rebuild:
- *   - advertising: name, service UUID, manufacturer data, scan response,
+ *   - advertising: raw ADV payload, scan response name,
  *     interval, discoverable mode
  *   - GATT: a custom 128-bit vendor service with an RX (write) characteristic
  *     and a TX (notify) characteristic.
@@ -41,8 +41,13 @@ static const runtime_ble_service_def_t my_services[] = {
 	{ .uuid = svc_uuid, .uuid_len = 16, .chars = my_chars, .num_chars = 2 },
 };
 
-/* Demo manufacturer-specific advertising payload (after the company id). */
-static const uint8_t mfg_data[] = {0x52, 0x42, 0x01};
+/* Raw ADV data: flags + manufacturer data + complete 128-bit service UUID. */
+static const uint8_t adv_data[] = {
+	2, 0x01, 0x06,
+	6, 0xff, 0xff, 0xff, 0x52, 0x42, 0x01,
+	17, 0x07, 0x9e, 0xca, 0xdc, 0x24, 0x0e, 0xe5, 0xa9, 0xe0,
+	0x93, 0xf3, 0xa3, 0xb5, 0x01, 0x00, 0x4c, 0xe5
+};
 /* Raw AD structure: Complete Local Name "RUNTIME-BLE" for scan response. */
 static const uint8_t scan_rsp[] = {
 	12, 0x09, 'R', 'U', 'N', 'T', 'I', 'M', 'E', '-', 'B', 'L', 'E'
@@ -129,11 +134,8 @@ int main(void)
 {
 	static const runtime_ble_config_t cfg = {
 		.device_name = "RUNTIME-BLE",
-		.manufacturer_id = 0xFFFF,
-		.manufacturer_data = mfg_data,
-		.manufacturer_data_len = sizeof(mfg_data),
-		.adv_service_uuid = svc_uuid,
-		.adv_service_uuid_len = sizeof(svc_uuid),
+		.adv_data = adv_data,
+		.adv_data_len = sizeof(adv_data),
 		.scan_response_data = scan_rsp,
 		.scan_response_data_len = sizeof(scan_rsp),
 		.adv_interval_min_ms = 30,

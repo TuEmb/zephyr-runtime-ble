@@ -206,6 +206,8 @@ typedef struct {
  */
 typedef struct {
 	const char             *device_name;          /* adv name; NULL -> "RUNTIME-BLE"      */
+	const uint8_t          *adv_data;             /* raw AD structures; NULL -> build from fields */
+	uint8_t                 adv_data_len;         /* raw advertising data length, <=31 */
 	uint16_t                manufacturer_id;      /* company ID for the manufacturer AD   */
 	const uint8_t          *manufacturer_data;    /* bytes after company ID; NULL -> none */
 	uint16_t                manufacturer_data_len;

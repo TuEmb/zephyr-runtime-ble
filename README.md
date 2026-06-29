@@ -133,6 +133,9 @@ runtime_ble_update_conn_params(30, 60, 0, 4000);
 runtime_ble_request_security();  // pairing/encryption; events -> on_security_event
 runtime_ble_unload();            // tear down, free session RAM
 ```
+For fully custom beacons, set `adv_data`/`adv_data_len` to raw AD structures
+(up to 31 bytes); when present it bypasses the automatic advertising builder.
+
 Characteristics are addressed by **flat index** (declaration order). Callbacks:
 `on_connected`, `on_disconnected`, `on_write(chr, …)`, `on_read_value(chr, …)`
 (or `on_data` for the built-in NUS RX), `on_subscription(chr, notify, indicate)`

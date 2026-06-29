@@ -176,6 +176,8 @@ pub struct RuntimeBleServiceDef {
 #[derive(Clone, Copy)]
 pub struct RuntimeBleConfig {
     pub device_name: *const c_char,
+    pub adv_data: *const u8,
+    pub adv_data_len: u8,
     /// Company identifier for the manufacturer-specific AD (e.g. 0xFFFF).
     pub manufacturer_id: u16,
     /// Bytes after the company id in the manufacturer-specific AD (or null).
@@ -223,6 +225,8 @@ pub struct RuntimeBleConfig {
 #[derive(Clone, Copy)]
 pub(crate) struct RuntimeCfg {
     pub device_name: *const c_char,
+    pub adv_data: *const u8,
+    pub adv_data_len: u8,
     pub manufacturer_id: u16,
     pub manufacturer_data: *const u8,
     pub manufacturer_data_len: u16,
@@ -339,6 +343,8 @@ pub extern "C" fn runtime_ble_init(cfg: *const RuntimeBleConfig) -> c_int {
     unsafe {
         CONFIG = Some(RuntimeCfg {
             device_name: c.device_name,
+            adv_data: c.adv_data,
+            adv_data_len: c.adv_data_len,
             manufacturer_id: c.manufacturer_id,
             manufacturer_data: c.manufacturer_data,
             manufacturer_data_len: c.manufacturer_data_len,
