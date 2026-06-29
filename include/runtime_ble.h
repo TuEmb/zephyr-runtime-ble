@@ -48,6 +48,10 @@ extern "C" {
 #define RUNTIME_BLE_ROLE_CENTRAL    1   /* scan/connect + GATT client         */
 #define RUNTIME_BLE_ROLE_DUAL       2   /* both at once: server + client      */
 
+/* PHY selector for runtime_ble_set_phy(). */
+#define RUNTIME_BLE_PHY_1M 1
+#define RUNTIME_BLE_PHY_2M 2
+
 /* ---- Optional user-defined GATT ----
  * Characteristic property bitmask. */
 #define RUNTIME_BLE_PROP_READ        (1u << 0)
@@ -96,6 +100,13 @@ typedef struct {
 	void (*on_read)(uint16_t handle, const uint8_t *data, size_t len, void *user);
 	/* A notification/indication from a subscribed characteristic. */
 	void (*on_notification)(uint16_t handle, const uint8_t *data, size_t len, void *user);
+
+	/* ---- Link updates (peripheral or central connection) ---- */
+	void (*on_conn_params)(uint16_t interval_ms, uint16_t latency,
+			       uint16_t timeout_ms, void *user);
+	void (*on_phy_update)(uint8_t tx_phy, uint8_t rx_phy, void *user);
+	void (*on_data_length_update)(uint16_t max_tx_octets, uint16_t max_rx_octets,
+				      void *user);
 
 	/* Optional text log line (NUL-terminated) for the app's console. */
 	void (*on_log)(const char *line, void *user);
@@ -173,6 +184,16 @@ int runtime_ble_send(const uint8_t *data, size_t len);
  * declaration order across config.services). The characteristic must have
  * RUNTIME_BLE_PROP_NOTIFY or _INDICATE. Returns RUNTIME_BLE_OK or an error. */
 int runtime_ble_notify(uint16_t chr, const uint8_t *data, size_t len);
+
+/* Request a link PHY update on the active connection. phy is RUNTIME_BLE_PHY_*. */
+int runtime_ble_set_phy(uint8_t phy);
+
+/* Request LE Data Length Update on the active connection. 0 -> 251 octets/2120 us. */
+int runtime_ble_update_data_length(uint16_t tx_octets, uint16_t tx_time_us);
+
+/* Request connection parameter update on the active connection. 0 uses defaults. */
+int runtime_ble_update_conn_params(uint16_t min_interval_ms, uint16_t max_interval_ms,
+				   uint16_t latency, uint16_t timeout_ms);
 
 /* The per-device BLE address as 6 bytes, out[0]=LSB. Stable across re-flashes
  * (derived from hwinfo); usable e.g. to build a per-device advertising name. */

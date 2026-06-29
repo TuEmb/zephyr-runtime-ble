@@ -75,16 +75,26 @@ pub struct RuntimeBleCallbacks {
     pub on_read_value:
         Option<extern "C" fn(chr: u16, out: *mut u8, max_len: usize, user: *mut c_void) -> usize>,
     /// Central: a scan advertising report (addr is 6 bytes, LSB first).
-    pub on_scan_result:
-        Option<extern "C" fn(addr: *const u8, rssi: i8, adv: *const u8, adv_len: usize, user: *mut c_void)>,
+    pub on_scan_result: Option<
+        extern "C" fn(addr: *const u8, rssi: i8, adv: *const u8, adv_len: usize, user: *mut c_void),
+    >,
     /// Central: a characteristic found by runtime_ble_client_discover.
-    pub on_discovered:
-        Option<extern "C" fn(handle: u16, uuid: *const u8, uuid_len: u8, props: u16, user: *mut c_void)>,
+    pub on_discovered: Option<
+        extern "C" fn(handle: u16, uuid: *const u8, uuid_len: u8, props: u16, user: *mut c_void),
+    >,
     /// Central: value returned by runtime_ble_client_read.
     pub on_read: Option<extern "C" fn(handle: u16, data: *const u8, len: usize, user: *mut c_void)>,
     /// Central: a notification/indication from a subscribed characteristic.
     pub on_notification:
         Option<extern "C" fn(handle: u16, data: *const u8, len: usize, user: *mut c_void)>,
+    /// Link connection parameters changed.
+    pub on_conn_params:
+        Option<extern "C" fn(interval_ms: u16, latency: u16, timeout_ms: u16, user: *mut c_void)>,
+    /// Link PHY changed; values use RUNTIME_BLE_PHY_*.
+    pub on_phy_update: Option<extern "C" fn(tx_phy: u8, rx_phy: u8, user: *mut c_void)>,
+    /// Link data length changed.
+    pub on_data_length_update:
+        Option<extern "C" fn(max_tx_octets: u16, max_rx_octets: u16, user: *mut c_void)>,
     /// Optional NUL-terminated text log line for the app's console.
     pub on_log: Option<extern "C" fn(line: *const c_char, user: *mut c_void)>,
     /// L2CAP: channel established.
@@ -211,6 +221,20 @@ pub(crate) static L2CAP_SEND_REQ: AtomicBool = AtomicBool::new(false);
 pub(crate) static L2CAP_SEND_LEN: AtomicUsize = AtomicUsize::new(0);
 pub(crate) static mut L2CAP_SEND_BUF: [u8; SEND_BUF_CAP] = [0; SEND_BUF_CAP];
 
+// ---- Active-link control channel (peripheral or central connection) ----
+pub(crate) const LCMD_NONE: u32 = 0;
+pub(crate) const LCMD_SET_PHY: u32 = 1;
+pub(crate) const LCMD_DLE: u32 = 2;
+pub(crate) const LCMD_CONN_PARAMS: u32 = 3;
+pub(crate) static LINK_CMD: AtomicU32 = AtomicU32::new(LCMD_NONE);
+pub(crate) static LINK_PHY: AtomicUsize = AtomicUsize::new(0);
+pub(crate) static LINK_DLE_OCTETS: AtomicUsize = AtomicUsize::new(0);
+pub(crate) static LINK_DLE_TIME_US: AtomicUsize = AtomicUsize::new(0);
+pub(crate) static LINK_CONN_MIN_MS: AtomicUsize = AtomicUsize::new(0);
+pub(crate) static LINK_CONN_MAX_MS: AtomicUsize = AtomicUsize::new(0);
+pub(crate) static LINK_CONN_LATENCY: AtomicUsize = AtomicUsize::new(0);
+pub(crate) static LINK_CONN_TIMEOUT_MS: AtomicUsize = AtomicUsize::new(0);
+
 const RUNTIME_BLE_OK: c_int = 0;
 const RUNTIME_BLE_ERR_INVALID: c_int = -1;
 const RUNTIME_BLE_ERR_NO_MEM: c_int = -2;
@@ -281,6 +305,44 @@ pub extern "C" fn runtime_ble_notify(chr: u16, data: *const u8, len: usize) -> c
     queue_tx(chr as usize, data, len)
 }
 
+fn link_cmd(cmd: u32) -> c_int {
+    if LINK_CMD.load(Ordering::Acquire) != LCMD_NONE {
+        return RUNTIME_BLE_ERR_NO_MEM;
+    }
+    LINK_CMD.store(cmd, Ordering::Release);
+    RUNTIME_BLE_OK
+}
+
+#[no_mangle]
+pub extern "C" fn runtime_ble_set_phy(phy: u8) -> c_int {
+    if phy != 1 && phy != 2 {
+        return RUNTIME_BLE_ERR_INVALID;
+    }
+    LINK_PHY.store(phy as usize, Ordering::Release);
+    link_cmd(LCMD_SET_PHY)
+}
+
+#[no_mangle]
+pub extern "C" fn runtime_ble_update_data_length(tx_octets: u16, tx_time_us: u16) -> c_int {
+    LINK_DLE_OCTETS.store(tx_octets as usize, Ordering::Release);
+    LINK_DLE_TIME_US.store(tx_time_us as usize, Ordering::Release);
+    link_cmd(LCMD_DLE)
+}
+
+#[no_mangle]
+pub extern "C" fn runtime_ble_update_conn_params(
+    min_interval_ms: u16,
+    max_interval_ms: u16,
+    latency: u16,
+    timeout_ms: u16,
+) -> c_int {
+    LINK_CONN_MIN_MS.store(min_interval_ms as usize, Ordering::Release);
+    LINK_CONN_MAX_MS.store(max_interval_ms as usize, Ordering::Release);
+    LINK_CONN_LATENCY.store(latency as usize, Ordering::Release);
+    LINK_CONN_TIMEOUT_MS.store(timeout_ms as usize, Ordering::Release);
+    link_cmd(LCMD_CONN_PARAMS)
+}
+
 // ---- Central / GATT client API ----
 // The functions exist in every build (stable C ABI). Without the `central`
 // feature they return RUNTIME_BLE_ERR_INVALID; with it they queue one command
@@ -339,7 +401,11 @@ pub extern "C" fn runtime_ble_connect(addr: *const u8) -> c_int {
             return RUNTIME_BLE_ERR_INVALID;
         }
         unsafe {
-            core::ptr::copy_nonoverlapping(addr, core::ptr::addr_of_mut!(CENTRAL_ADDR) as *mut u8, 6);
+            core::ptr::copy_nonoverlapping(
+                addr,
+                core::ptr::addr_of_mut!(CENTRAL_ADDR) as *mut u8,
+                6,
+            );
         }
         central_cmd(CCMD_CONNECT, 0)
     }

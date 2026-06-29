@@ -24,29 +24,34 @@ use embassy_time_driver::Driver;
 use embassy_time_queue_utils::Queue;
 use nrf_sdc::mpsl::MultiprotocolServiceLayer;
 use trouble_host::attribute::{AttributeTable, Characteristic, CharacteristicProps, Service};
-use trouble_host::prelude::*;
+use trouble_host::connection::RequestedConnParams;
 #[cfg(feature = "central")]
 use trouble_host::connection::{ConnectConfig, ScanConfig};
 #[cfg(feature = "central")]
 use trouble_host::gatt::GattClient;
-#[cfg(feature = "central")]
-use trouble_host::scan::Scanner;
 #[cfg(feature = "l2cap")]
 use trouble_host::l2cap::{L2capChannel, L2capChannelConfig};
+use trouble_host::prelude::*;
+#[cfg(feature = "central")]
+use trouble_host::scan::Scanner;
 
 use crate::{
-    RuntimeBleCharDef, RuntimeCfg, NUS_TX_CHR, SEND_BUF, SEND_BUF_CAP,
-    SEND_CHR, SEND_LEN, SEND_REQ, UNLOAD_REQ,
+    RuntimeBleCharDef, RuntimeCfg, NUS_TX_CHR, SEND_BUF, SEND_BUF_CAP, SEND_CHR, SEND_LEN,
+    SEND_REQ, UNLOAD_REQ,
 };
 #[cfg(feature = "central")]
 use crate::{
     CCMD_CONNECT, CCMD_DISCONNECT, CCMD_DISCOVER, CCMD_NONE, CCMD_READ, CCMD_SCAN_START,
     CCMD_SCAN_STOP, CCMD_SUBSCRIBE, CCMD_WRITE, CENTRAL_ADDR, CENTRAL_CMD, CENTRAL_HANDLE,
-    CENTRAL_UUID, CENTRAL_UUID_LEN, SCAN_ACTIVE, SCAN_INTERVAL_MS, SCAN_TIMEOUT_MS,
-    SCAN_WINDOW_MS,
+    CENTRAL_UUID, CENTRAL_UUID_LEN, SCAN_ACTIVE, SCAN_INTERVAL_MS, SCAN_TIMEOUT_MS, SCAN_WINDOW_MS,
 };
 #[cfg(feature = "l2cap")]
 use crate::{L2CAP_SEND_BUF, L2CAP_SEND_LEN, L2CAP_SEND_REQ};
+use crate::{
+    LCMD_CONN_PARAMS, LCMD_DLE, LCMD_NONE, LCMD_SET_PHY, LINK_CMD, LINK_CONN_LATENCY,
+    LINK_CONN_MAX_MS, LINK_CONN_MIN_MS, LINK_CONN_TIMEOUT_MS, LINK_DLE_OCTETS, LINK_DLE_TIME_US,
+    LINK_PHY,
+};
 
 // Per-chip bring-up. Exactly one chip feature is enabled; `chip::run` is the
 // entry called from lib.rs.
@@ -378,7 +383,10 @@ pub(crate) fn serve_session(
     let mut peripheral = stack.peripheral();
     let runner = stack.runner();
     let ble_main = async {
-        let work = join(run_runner(runner, cfg), serve(&mut peripheral, &gatt, server, stack, cfg));
+        let work = join(
+            run_runner(runner, cfg),
+            serve(&mut peripheral, &gatt, server, stack, cfg),
+        );
         // Dual GAP role (RUNTIME_BLE_ROLE_DUAL): also run the central side
         // (connect + GATT client) so the device is a server (this advertise/serve
         // loop) AND a client at the same time, on two simultaneous links.
@@ -396,7 +404,13 @@ pub(crate) fn serve_session(
     // Teardown. Drop the server (and the attribute table it owns) and the
     // characteristic handles FIRST, so nothing references the value buffers
     // anymore, THEN reclaim those heap buffers — a load/unload cycle leaks no RAM.
-    let Gatt { server, chars, props, stores, .. } = gatt;
+    let Gatt {
+        server,
+        chars,
+        props,
+        stores,
+        ..
+    } = gatt;
     drop(server);
     drop(chars);
     drop(props);
@@ -471,6 +485,83 @@ async fn run_connection(
         }
     }
     connection_task(conn, server, gatt, stack, cfg).await;
+}
+
+fn phy_to_c(phy: trouble_host::prelude::PhyKind) -> u8 {
+    match phy {
+        trouble_host::prelude::PhyKind::Le2M => 2,
+        _ => 1,
+    }
+}
+
+async fn link_control(
+    conn: &Connection<'_, DefaultPacketPool>,
+    stack: &Stack<'_, nrf_sdc::SoftdeviceController<'static>, DefaultPacketPool>,
+    cfg: &RuntimeCfg,
+) {
+    loop {
+        match LINK_CMD.swap(LCMD_NONE, Ordering::AcqRel) {
+            LCMD_SET_PHY => {
+                let phy = if LINK_PHY.load(Ordering::Acquire) == 2 {
+                    trouble_host::prelude::PhyKind::Le2M
+                } else {
+                    trouble_host::prelude::PhyKind::Le1M
+                };
+                let _ = conn.set_phy(stack, phy).await;
+            }
+            LCMD_DLE => {
+                let octets = LINK_DLE_OCTETS.load(Ordering::Acquire);
+                let time_us = LINK_DLE_TIME_US.load(Ordering::Acquire);
+                let octets = if octets == 0 {
+                    251
+                } else {
+                    octets.min(u16::MAX as usize)
+                };
+                let time_us = if time_us == 0 {
+                    2120
+                } else {
+                    time_us.min(u16::MAX as usize)
+                };
+                let _ = conn
+                    .update_data_length(stack, octets as u16, time_us as u16)
+                    .await;
+            }
+            LCMD_CONN_PARAMS => {
+                let min_ms = LINK_CONN_MIN_MS.load(Ordering::Acquire);
+                let max_ms = LINK_CONN_MAX_MS.load(Ordering::Acquire);
+                let timeout_ms = LINK_CONN_TIMEOUT_MS.load(Ordering::Acquire);
+                let params = RequestedConnParams {
+                    min_connection_interval: Duration::from_millis(if min_ms == 0 {
+                        80
+                    } else {
+                        min_ms as u64
+                    }),
+                    max_connection_interval: Duration::from_millis(if max_ms == 0 {
+                        80
+                    } else {
+                        max_ms as u64
+                    }),
+                    max_latency: LINK_CONN_LATENCY
+                        .load(Ordering::Acquire)
+                        .min(u16::MAX as usize) as u16,
+                    min_event_length: Duration::from_secs(0),
+                    max_event_length: Duration::from_secs(0),
+                    supervision_timeout: Duration::from_millis(if timeout_ms == 0 {
+                        8000
+                    } else {
+                        timeout_ms as u64
+                    }),
+                };
+                if params.is_valid() {
+                    let _ = conn.update_connection_params(stack, &params).await;
+                } else {
+                    log_str(cfg, "[link] invalid connection params\0");
+                }
+            }
+            _ => {}
+        }
+        Timer::after(Duration::from_millis(20)).await;
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -675,7 +766,11 @@ async fn run_scan(
     let timeout_ms = SCAN_TIMEOUT_MS.load(Ordering::Acquire);
     let scan_config = ScanConfig {
         active: SCAN_ACTIVE.load(Ordering::Acquire),
-        interval: Duration::from_millis(if interval_ms == 0 { 100 } else { interval_ms as u64 }),
+        interval: Duration::from_millis(if interval_ms == 0 {
+            100
+        } else {
+            interval_ms as u64
+        }),
         window: Duration::from_millis(if window_ms == 0 { 50 } else { window_ms as u64 }),
         timeout: Duration::from_millis(timeout_ms as u64),
         ..Default::default()
@@ -764,7 +859,10 @@ async fn client_session(
                 }
                 CCMD_WRITE => {
                     let h = CENTRAL_HANDLE.load(Ordering::Acquire) as u16;
-                    let len = SEND_LEN.load(Ordering::Acquire).min(VALUE_LEN).min(SEND_BUF_CAP);
+                    let len = SEND_LEN
+                        .load(Ordering::Acquire)
+                        .min(VALUE_LEN)
+                        .min(SEND_BUF_CAP);
                     let mut wbuf = [0u8; VALUE_LEN];
                     unsafe {
                         core::ptr::copy_nonoverlapping(
@@ -832,7 +930,13 @@ async fn client_discover(
                 let _ = store.borrow_mut().push((c.handle, c.cccd_handle));
                 if let Some(cb) = cfg.callbacks.on_discovered {
                     let raw = c.uuid.as_raw();
-                    cb(c.handle, raw.as_ptr(), raw.len() as u8, props_to_c(c.props.to_raw()), cfg.user);
+                    cb(
+                        c.handle,
+                        raw.as_ptr(),
+                        raw.len() as u8,
+                        props_to_c(c.props.to_raw()),
+                        cfg.user,
+                    );
                 }
             }
         }
@@ -850,15 +954,21 @@ async fn run_central_conn(
     #[cfg(feature = "l2cap")]
     {
         if cfg.l2cap_psm != 0 {
-            select(
+            select3(
                 client_session(stack, conn, cfg),
                 l2cap_central(stack, conn, cfg),
+                link_control(conn, stack, cfg),
             )
             .await;
             return;
         }
     }
-    client_session(stack, conn, cfg).await;
+    select3(
+        client_session(stack, conn, cfg),
+        link_control(conn, stack, cfg),
+        wait_unload(),
+    )
+    .await;
 }
 
 /// Central side of L2CAP: open a channel to the peer's PSM, then pump it.
@@ -933,8 +1043,16 @@ async fn advertise<'a>(
         ],
         &mut adv[..],
     )?;
-    let min_ms = if cfg.adv_interval_min_ms == 0 { 30 } else { cfg.adv_interval_min_ms } as u64;
-    let max_ms = if cfg.adv_interval_max_ms == 0 { 60 } else { cfg.adv_interval_max_ms } as u64;
+    let min_ms = if cfg.adv_interval_min_ms == 0 {
+        30
+    } else {
+        cfg.adv_interval_min_ms
+    } as u64;
+    let max_ms = if cfg.adv_interval_max_ms == 0 {
+        60
+    } else {
+        cfg.adv_interval_max_ms
+    } as u64;
     let adv_params = AdvertisementParameters {
         interval_min: Duration::from_millis(min_ms),
         interval_max: Duration::from_millis(max_ms),
@@ -970,77 +1088,107 @@ async fn connection_task(
                 GattConnectionEvent::Disconnected { reason } => {
                     use core::fmt::Write;
                     let mut s: heapless::String<48> = heapless::String::new();
-                    let _ = write!(s, "[link] disconnected reason=0x{:02x}\0", reason.into_inner());
+                    let _ = write!(
+                        s,
+                        "[link] disconnected reason=0x{:02x}\0",
+                        reason.into_inner()
+                    );
                     log_str(cfg, &s);
                     break;
                 }
                 GattConnectionEvent::RequestConnectionParams(req) => {
                     let _ = req.accept(None, stack).await;
                 }
-                GattConnectionEvent::Gatt { event } => {
-                    match event {
-                        GattEvent::Write(w) => {
-                            let mut buf = [0u8; VALUE_LEN];
-                            let mut n = 0usize;
-                            let mut idx = usize::MAX;
-                            let h = w.handle();
-                            for (i, c) in gatt.chars.iter().enumerate() {
-                                if c.handle == h {
-                                    idx = i;
-                                    break;
-                                }
-                            }
-                            if idx != usize::MAX {
-                                w.with_data(|_off, data| {
-                                    n = data.len().min(VALUE_LEN);
-                                    buf[..n].copy_from_slice(&data[..n]);
-                                });
-                            }
-                            if let Ok(reply) = w.accept() {
-                                let _ = reply.send().await;
-                            }
-                            if idx != usize::MAX {
-                                if idx == gatt.nus_rx {
-                                    if let Some(cb) = cfg.callbacks.on_data {
-                                        cb(buf.as_ptr(), n, cfg.user);
-                                    }
-                                } else if let Some(cb) = cfg.callbacks.on_write {
-                                    cb(idx as u16, buf.as_ptr(), n, cfg.user);
-                                }
-                            }
-                        }
-                        GattEvent::Read(r) => {
-                            let mut idx = usize::MAX;
-                            let h = r.handle();
-                            for (i, c) in gatt.chars.iter().enumerate() {
-                                if c.handle == h {
-                                    idx = i;
-                                    break;
-                                }
-                            }
-                            let reply = if idx != usize::MAX {
-                                if let Some(cb) = cfg.callbacks.on_read_value {
-                                    let mut out = [0u8; VALUE_LEN];
-                                    let n = cb(idx as u16, out.as_mut_ptr(), out.len(), cfg.user)
-                                        .min(VALUE_LEN);
-                                    r.accept_unprocessed(&out[..n])
-                                } else {
-                                    r.accept()
-                                }
-                            } else {
-                                r.accept()
-                            };
-                            if let Ok(reply) = reply {
-                                let _ = reply.send().await;
+                GattConnectionEvent::ConnectionParamsUpdated {
+                    conn_interval,
+                    peripheral_latency,
+                    supervision_timeout,
+                } => {
+                    if let Some(cb) = cfg.callbacks.on_conn_params {
+                        cb(
+                            conn_interval.as_millis().min(u16::MAX as u64) as u16,
+                            peripheral_latency,
+                            supervision_timeout.as_millis().min(u16::MAX as u64) as u16,
+                            cfg.user,
+                        );
+                    }
+                }
+                GattConnectionEvent::PhyUpdated { tx_phy, rx_phy } => {
+                    if let Some(cb) = cfg.callbacks.on_phy_update {
+                        cb(phy_to_c(tx_phy), phy_to_c(rx_phy), cfg.user);
+                    }
+                }
+                GattConnectionEvent::DataLengthUpdated {
+                    max_tx_octets,
+                    max_rx_octets,
+                    ..
+                } => {
+                    if let Some(cb) = cfg.callbacks.on_data_length_update {
+                        cb(max_tx_octets, max_rx_octets, cfg.user);
+                    }
+                }
+                GattConnectionEvent::Gatt { event } => match event {
+                    GattEvent::Write(w) => {
+                        let mut buf = [0u8; VALUE_LEN];
+                        let mut n = 0usize;
+                        let mut idx = usize::MAX;
+                        let h = w.handle();
+                        for (i, c) in gatt.chars.iter().enumerate() {
+                            if c.handle == h {
+                                idx = i;
+                                break;
                             }
                         }
-                        other => {
-                            if let Ok(reply) = other.accept() {
-                                let _ = reply.send().await;
+                        if idx != usize::MAX {
+                            w.with_data(|_off, data| {
+                                n = data.len().min(VALUE_LEN);
+                                buf[..n].copy_from_slice(&data[..n]);
+                            });
+                        }
+                        if let Ok(reply) = w.accept() {
+                            let _ = reply.send().await;
+                        }
+                        if idx != usize::MAX {
+                            if idx == gatt.nus_rx {
+                                if let Some(cb) = cfg.callbacks.on_data {
+                                    cb(buf.as_ptr(), n, cfg.user);
+                                }
+                            } else if let Some(cb) = cfg.callbacks.on_write {
+                                cb(idx as u16, buf.as_ptr(), n, cfg.user);
                             }
                         }
                     }
-                }
+                    GattEvent::Read(r) => {
+                        let mut idx = usize::MAX;
+                        let h = r.handle();
+                        for (i, c) in gatt.chars.iter().enumerate() {
+                            if c.handle == h {
+                                idx = i;
+                                break;
+                            }
+                        }
+                        let reply = if idx != usize::MAX {
+                            if let Some(cb) = cfg.callbacks.on_read_value {
+                                let mut out = [0u8; VALUE_LEN];
+                                let n = cb(idx as u16, out.as_mut_ptr(), out.len(), cfg.user)
+                                    .min(VALUE_LEN);
+                                r.accept_unprocessed(&out[..n])
+                            } else {
+                                r.accept()
+                            }
+                        } else {
+                            r.accept()
+                        };
+                        if let Ok(reply) = reply {
+                            let _ = reply.send().await;
+                        }
+                    }
+                    other => {
+                        if let Ok(reply) = other.accept() {
+                            let _ = reply.send().await;
+                        }
+                    }
+                },
                 _ => {}
             }
         }
@@ -1051,7 +1199,10 @@ async fn connection_task(
             if SEND_REQ.load(Ordering::Acquire) {
                 let chr = SEND_CHR.load(Ordering::Acquire);
                 let target = if chr == NUS_TX_CHR { gatt.nus_tx } else { chr };
-                let len = SEND_LEN.load(Ordering::Acquire).min(VALUE_LEN).min(SEND_BUF_CAP);
+                let len = SEND_LEN
+                    .load(Ordering::Acquire)
+                    .min(VALUE_LEN)
+                    .min(SEND_BUF_CAP);
                 let mut txbuf = [0u8; VALUE_LEN];
                 unsafe {
                     core::ptr::copy_nonoverlapping(
@@ -1074,5 +1225,10 @@ async fn connection_task(
         }
     };
 
-    select3(events, tx, wait_unload()).await;
+    select3(
+        events,
+        join(tx, link_control(conn, stack, cfg)),
+        wait_unload(),
+    )
+    .await;
 }
