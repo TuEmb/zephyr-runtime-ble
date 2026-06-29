@@ -231,6 +231,8 @@ pub struct RuntimeBleConfig {
     /// Advertising interval window in milliseconds (0 -> 30 / 60 default).
     pub adv_interval_min_ms: u16,
     pub adv_interval_max_ms: u16,
+    /// Advertising channel map bits: bit0=37, bit1=38, bit2=39; 0 -> all.
+    pub adv_channel_map: u8,
     /// 0 = general discoverable (default), 1 = limited, 2 = non-discoverable.
     pub discoverable: u8,
     /// Optional custom 6-byte static-random address; null -> hwinfo-derived.
@@ -284,6 +286,7 @@ pub(crate) struct RuntimeCfg {
     pub nonconnectable: u8,
     pub adv_interval_min_ms: u16,
     pub adv_interval_max_ms: u16,
+    pub adv_channel_map: u8,
     pub discoverable: u8,
     pub address: *const u8,
     pub directed_peer_address: *const u8,
@@ -424,6 +427,7 @@ pub extern "C" fn runtime_ble_init(cfg: *const RuntimeBleConfig) -> c_int {
             nonconnectable: c.nonconnectable,
             adv_interval_min_ms: c.adv_interval_min_ms,
             adv_interval_max_ms: c.adv_interval_max_ms,
+            adv_channel_map: c.adv_channel_map,
             discoverable: c.discoverable,
             address: c.address,
             directed_peer_address: c.directed_peer_address,

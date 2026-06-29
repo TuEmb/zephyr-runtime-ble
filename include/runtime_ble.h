@@ -62,6 +62,13 @@ extern "C" {
 #define RUNTIME_BLE_PHY_MASK_2M    (1u << 1)
 #define RUNTIME_BLE_PHY_MASK_CODED (1u << 2)
 
+/* Advertising channel map bits for config.adv_channel_map. */
+#define RUNTIME_BLE_ADV_CH_37 (1u << 0)
+#define RUNTIME_BLE_ADV_CH_38 (1u << 1)
+#define RUNTIME_BLE_ADV_CH_39 (1u << 2)
+#define RUNTIME_BLE_ADV_CH_ALL \
+	(RUNTIME_BLE_ADV_CH_37 | RUNTIME_BLE_ADV_CH_38 | RUNTIME_BLE_ADV_CH_39)
+
 /* Frame spacing type bits for runtime_ble_update_frame_space(). */
 #define RUNTIME_BLE_FRAME_SPACE_ACL_CP (1u << 0)
 #define RUNTIME_BLE_FRAME_SPACE_ACL_PC (1u << 1)
@@ -268,6 +275,7 @@ typedef struct {
 	uint8_t                 nonconnectable;       /* 1 -> beacon/broadcast only */
 	uint16_t                adv_interval_min_ms;  /* 0 -> 30 ms                            */
 	uint16_t                adv_interval_max_ms;  /* 0 -> 60 ms                            */
+	uint8_t                 adv_channel_map;      /* RUNTIME_BLE_ADV_CH_*; 0 -> all channels */
 	uint8_t                 discoverable;         /* 0 general (default), 1 limited, 2 none */
 	const uint8_t          *address;              /* optional 6-byte static-random addr;   */
 	                                              /* NULL -> hwinfo-derived                */

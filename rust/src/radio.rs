@@ -44,7 +44,7 @@ use trouble_host::l2cap::{L2capChannel, L2capChannelConfig};
 use trouble_host::prelude::*;
 #[cfg(feature = "central")]
 use trouble_host::scan::Scanner;
-use trouble_host::advertise::TxPower;
+use trouble_host::advertise::{AdvChannelMap, TxPower};
 use trouble_host::{BondInformation, Identity, IdentityResolvingKey, LongTermKey, OobData};
 
 use crate::{
@@ -1923,7 +1923,22 @@ fn advertising_params(cfg: &RuntimeCfg) -> AdvertisementParameters {
         interval_min: Duration::from_millis(min_ms),
         interval_max: Duration::from_millis(max_ms),
         tx_power: adv_tx_power(cfg),
+        channel_map: adv_channel_map(cfg),
         ..Default::default()
+    }
+}
+
+fn adv_channel_map(cfg: &RuntimeCfg) -> Option<AdvChannelMap> {
+    let bits = cfg.adv_channel_map & 0x07;
+    if bits == 0 {
+        None
+    } else {
+        Some(
+            AdvChannelMap::new()
+                .enable_channel_37((bits & 0x01) != 0)
+                .enable_channel_38((bits & 0x02) != 0)
+                .enable_channel_39((bits & 0x04) != 0),
+        )
     }
 }
 

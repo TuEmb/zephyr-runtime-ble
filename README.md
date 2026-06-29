@@ -121,6 +121,7 @@ static const runtime_ble_config_t cfg = {
     /* .nonconnectable = 1, for beacon/broadcast-only advertising */
     /* .directed_peer_address = peer, for directed reconnect advertising */
     .adv_interval_min_ms = 30, .adv_interval_max_ms = 60,
+    .adv_channel_map = RUNTIME_BLE_ADV_CH_ALL,           /* 0 also means all */
     .services = svcs, .num_services = 1,
     .callbacks = { .on_write = on_write, .on_connected = on_conn, ... },
 };
@@ -140,6 +141,8 @@ For fully custom beacons, set `adv_data`/`adv_data_len` to raw AD structures
 For fast reconnect to a known central, set `directed_peer_address`,
 `directed_peer_address_kind`, and optionally `directed_high_duty`; directed
 legacy advertising is connectable, non-scannable, and carries no AD payload.
+Set `adv_channel_map` with `RUNTIME_BLE_ADV_CH_37/38/39` bits to restrict the
+legacy advertising channels; zero uses all three channels.
 
 Characteristics are addressed by **flat index** (declaration order). Callbacks:
 `on_connected`, `on_disconnected`, `on_write(chr, …)`, `on_read_value(chr, …)`

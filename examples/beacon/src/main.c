@@ -43,6 +43,7 @@ int main(void)
 		.nonconnectable = 1,
 		.adv_interval_min_ms = 100,
 		.adv_interval_max_ms = 250,
+		.adv_channel_map = RUNTIME_BLE_ADV_CH_ALL,
 		.discoverable = 0,
 		.callbacks = {
 			.on_log = on_log,
