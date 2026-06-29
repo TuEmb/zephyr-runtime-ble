@@ -67,6 +67,10 @@ static void on_connected(void *user)
 	ARG_UNUSED(user);
 	printk("[app] central connected\n");
 	(void)runtime_ble_read_rssi();
+	(void)runtime_ble_update_frame_space(0, 0, RUNTIME_BLE_PHY_MASK_1M,
+					     RUNTIME_BLE_FRAME_SPACE_ACL_CP |
+					     RUNTIME_BLE_FRAME_SPACE_ACL_PC);
+	(void)runtime_ble_request_connection_rate(0, 0, 1, 1, 0, 0, 0);
 }
 
 static void on_disconnected(uint8_t reason, void *user)

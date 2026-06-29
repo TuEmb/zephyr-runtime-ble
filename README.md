@@ -150,6 +150,15 @@ when a peer writes a CCCD, `on_conn_params`, `on_phy_update`,
 `on_oob_request`, `on_oob_local_data`, `on_log`. They run on the BLE thread —
 keep them short.
 
+On an active link, applications can request PHY, data length, classic
+connection-parameter, frame-spacing, and connection-rate/subrate updates with
+`runtime_ble_set_phy()`, `runtime_ble_update_data_length()`,
+`runtime_ble_update_conn_params()`, `runtime_ble_update_frame_space()`, and
+`runtime_ble_request_connection_rate()`. Results arrive through
+`on_phy_update`, `on_data_length_update`, `on_conn_params`,
+`on_frame_space`, and `on_connection_rate` when the controller/peer reports
+them.
+
 Set `runtime_ble_char_def_t.permissions` with `RUNTIME_BLE_PERM_READ_*`,
 `RUNTIME_BLE_PERM_WRITE_*`, or `RUNTIME_BLE_PERM_CCCD_*` to require encrypted or
 authenticated links for individual ATT operations.

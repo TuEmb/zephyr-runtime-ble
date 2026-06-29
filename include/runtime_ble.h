@@ -57,6 +57,18 @@ extern "C" {
 #define RUNTIME_BLE_PHY_2M 2
 #define RUNTIME_BLE_PHY_CODED 3
 
+/* PHY mask bits for runtime_ble_update_frame_space(). */
+#define RUNTIME_BLE_PHY_MASK_1M    (1u << 0)
+#define RUNTIME_BLE_PHY_MASK_2M    (1u << 1)
+#define RUNTIME_BLE_PHY_MASK_CODED (1u << 2)
+
+/* Frame spacing type bits for runtime_ble_update_frame_space(). */
+#define RUNTIME_BLE_FRAME_SPACE_ACL_CP (1u << 0)
+#define RUNTIME_BLE_FRAME_SPACE_ACL_PC (1u << 1)
+#define RUNTIME_BLE_FRAME_SPACE_MCES   (1u << 2)
+#define RUNTIME_BLE_FRAME_SPACE_CIS    (1u << 3)
+#define RUNTIME_BLE_FRAME_SPACE_MSS    (1u << 4)
+
 /* Scan report metadata flags for on_scan_result_meta(). */
 #define RUNTIME_BLE_SCAN_F_CONNECTABLE     (1u << 0)
 #define RUNTIME_BLE_SCAN_F_SCANNABLE       (1u << 1)
@@ -323,6 +335,18 @@ int runtime_ble_update_data_length(uint16_t tx_octets, uint16_t tx_time_us);
 /* Request connection parameter update on the active connection. 0 uses defaults. */
 int runtime_ble_update_conn_params(uint16_t min_interval_ms, uint16_t max_interval_ms,
 				   uint16_t latency, uint16_t timeout_ms);
+
+/* Request LE frame spacing update on the active connection. 0 min/max use
+ * conservative defaults; phy_mask=0 uses all LE PHYs; spacing_types=0 uses ACL. */
+int runtime_ble_update_frame_space(uint32_t min_us, uint32_t max_us,
+				   uint8_t phy_mask, uint8_t spacing_types);
+
+/* Request LE connection rate/subrate update on the active connection. 0 interval
+ * and timeout fields use defaults; subrate 0 uses 1. */
+int runtime_ble_request_connection_rate(uint16_t min_interval_ms, uint16_t max_interval_ms,
+					uint16_t subrate_min, uint16_t subrate_max,
+					uint16_t latency, uint16_t continuation_number,
+					uint16_t timeout_ms);
 
 /* Read RSSI on the active connection; result arrives via on_rssi. */
 int runtime_ble_read_rssi(void);

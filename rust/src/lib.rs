@@ -363,6 +363,8 @@ pub(crate) const LCMD_PASSKEY_CANCEL: u32 = 6;
 pub(crate) const LCMD_PASSKEY_INPUT: u32 = 7;
 pub(crate) const LCMD_READ_RSSI: u32 = 8;
 pub(crate) const LCMD_READ_ATT_MTU: u32 = 9;
+pub(crate) const LCMD_FRAME_SPACE: u32 = 10;
+pub(crate) const LCMD_CONNECTION_RATE: u32 = 11;
 pub(crate) static LINK_CMD: AtomicU32 = AtomicU32::new(LCMD_NONE);
 pub(crate) static LINK_PHY: AtomicUsize = AtomicUsize::new(0);
 pub(crate) static LINK_DLE_OCTETS: AtomicUsize = AtomicUsize::new(0);
@@ -371,6 +373,13 @@ pub(crate) static LINK_CONN_MIN_MS: AtomicUsize = AtomicUsize::new(0);
 pub(crate) static LINK_CONN_MAX_MS: AtomicUsize = AtomicUsize::new(0);
 pub(crate) static LINK_CONN_LATENCY: AtomicUsize = AtomicUsize::new(0);
 pub(crate) static LINK_CONN_TIMEOUT_MS: AtomicUsize = AtomicUsize::new(0);
+pub(crate) static LINK_FRAME_SPACE_MIN_US: AtomicUsize = AtomicUsize::new(0);
+pub(crate) static LINK_FRAME_SPACE_MAX_US: AtomicUsize = AtomicUsize::new(0);
+pub(crate) static LINK_FRAME_SPACE_PHY_MASK: AtomicUsize = AtomicUsize::new(0);
+pub(crate) static LINK_FRAME_SPACE_TYPES: AtomicUsize = AtomicUsize::new(0);
+pub(crate) static LINK_RATE_SUBRATE_MIN: AtomicUsize = AtomicUsize::new(0);
+pub(crate) static LINK_RATE_SUBRATE_MAX: AtomicUsize = AtomicUsize::new(0);
+pub(crate) static LINK_RATE_CONTINUATION: AtomicUsize = AtomicUsize::new(0);
 pub(crate) static LINK_PASSKEY: AtomicU32 = AtomicU32::new(0);
 
 const RUNTIME_BLE_OK: c_int = 0;
@@ -502,6 +511,40 @@ pub extern "C" fn runtime_ble_update_conn_params(
     LINK_CONN_LATENCY.store(latency as usize, Ordering::Release);
     LINK_CONN_TIMEOUT_MS.store(timeout_ms as usize, Ordering::Release);
     link_cmd(LCMD_CONN_PARAMS)
+}
+
+#[no_mangle]
+pub extern "C" fn runtime_ble_update_frame_space(
+    min_us: u32,
+    max_us: u32,
+    phy_mask: u8,
+    spacing_types: u8,
+) -> c_int {
+    LINK_FRAME_SPACE_MIN_US.store(min_us as usize, Ordering::Release);
+    LINK_FRAME_SPACE_MAX_US.store(max_us as usize, Ordering::Release);
+    LINK_FRAME_SPACE_PHY_MASK.store(phy_mask as usize, Ordering::Release);
+    LINK_FRAME_SPACE_TYPES.store(spacing_types as usize, Ordering::Release);
+    link_cmd(LCMD_FRAME_SPACE)
+}
+
+#[no_mangle]
+pub extern "C" fn runtime_ble_request_connection_rate(
+    min_interval_ms: u16,
+    max_interval_ms: u16,
+    subrate_min: u16,
+    subrate_max: u16,
+    latency: u16,
+    continuation_number: u16,
+    timeout_ms: u16,
+) -> c_int {
+    LINK_CONN_MIN_MS.store(min_interval_ms as usize, Ordering::Release);
+    LINK_CONN_MAX_MS.store(max_interval_ms as usize, Ordering::Release);
+    LINK_RATE_SUBRATE_MIN.store(subrate_min as usize, Ordering::Release);
+    LINK_RATE_SUBRATE_MAX.store(subrate_max as usize, Ordering::Release);
+    LINK_CONN_LATENCY.store(latency as usize, Ordering::Release);
+    LINK_RATE_CONTINUATION.store(continuation_number as usize, Ordering::Release);
+    LINK_CONN_TIMEOUT_MS.store(timeout_ms as usize, Ordering::Release);
+    link_cmd(LCMD_CONNECTION_RATE)
 }
 
 #[no_mangle]

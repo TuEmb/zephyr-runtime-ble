@@ -16,7 +16,9 @@ use core::pin::pin;
 use core::sync::atomic::Ordering;
 use core::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 
-use bt_hci::param::{AddrKind, BdAddr, LeAdvEventKind, LeExtAdvDataStatus};
+use bt_hci::param::{
+    AddrKind, BdAddr, LeAdvEventKind, LeExtAdvDataStatus, PhyMask, SpacingTypes,
+};
 #[cfg(feature = "central")]
 use bt_hci::param::FilterDuplicates;
 use bt_hci::uuid::BluetoothUuid16;
@@ -32,7 +34,7 @@ use nrf_sdc::mpsl::MultiprotocolServiceLayer;
 use trouble_host::attribute::{
     AttributeTable, Characteristic, CharacteristicProps, PermissionLevel, Service,
 };
-use trouble_host::connection::RequestedConnParams;
+use trouble_host::connection::{ConnectRateParams, RequestedConnParams};
 #[cfg(feature = "central")]
 use trouble_host::connection::{ConnectConfig, PhySet, ScanConfig};
 #[cfg(feature = "central")]
@@ -61,10 +63,13 @@ use crate::{
 #[cfg(feature = "l2cap")]
 use crate::{L2CAP_SEND_BUF, L2CAP_SEND_LEN, L2CAP_SEND_REQ};
 use crate::{
-    LCMD_CONN_PARAMS, LCMD_DLE, LCMD_NONE, LCMD_PASSKEY_CANCEL, LCMD_PASSKEY_CONFIRM,
-    LCMD_PASSKEY_INPUT, LCMD_READ_ATT_MTU, LCMD_READ_RSSI, LCMD_SECURITY_REQUEST, LCMD_SET_PHY, LINK_CMD,
-    LINK_CONN_LATENCY, LINK_CONN_MAX_MS, LINK_CONN_MIN_MS, LINK_CONN_TIMEOUT_MS, LINK_DLE_OCTETS,
-    LINK_DLE_TIME_US, LINK_PASSKEY, LINK_PHY,
+    LCMD_CONN_PARAMS, LCMD_CONNECTION_RATE, LCMD_DLE, LCMD_FRAME_SPACE, LCMD_NONE,
+    LCMD_PASSKEY_CANCEL, LCMD_PASSKEY_CONFIRM, LCMD_PASSKEY_INPUT, LCMD_READ_ATT_MTU,
+    LCMD_READ_RSSI, LCMD_SECURITY_REQUEST, LCMD_SET_PHY, LINK_CMD, LINK_CONN_LATENCY,
+    LINK_CONN_MAX_MS, LINK_CONN_MIN_MS, LINK_CONN_TIMEOUT_MS, LINK_DLE_OCTETS,
+    LINK_DLE_TIME_US, LINK_FRAME_SPACE_MAX_US, LINK_FRAME_SPACE_MIN_US,
+    LINK_FRAME_SPACE_PHY_MASK, LINK_FRAME_SPACE_TYPES, LINK_PASSKEY, LINK_PHY,
+    LINK_RATE_CONTINUATION, LINK_RATE_SUBRATE_MAX, LINK_RATE_SUBRATE_MIN,
 };
 
 // Per-chip bring-up. Exactly one chip feature is enabled; `chip::run` is the
@@ -956,6 +961,86 @@ async fn link_control_once(
                 let _ = conn.update_connection_params(stack, &params).await;
             } else {
                 log_str(cfg, "[link] invalid connection params\0");
+            }
+        }
+        LCMD_FRAME_SPACE => {
+            let min_us = LINK_FRAME_SPACE_MIN_US.load(Ordering::Acquire);
+            let max_us = LINK_FRAME_SPACE_MAX_US.load(Ordering::Acquire);
+            let min_us = if min_us == 0 { 150 } else { min_us as u64 };
+            let max_us = if max_us == 0 { 10_000 } else { max_us as u64 };
+            if min_us > max_us {
+                log_str(cfg, "[link] invalid frame spacing\0");
+            } else {
+                let phy_bits = LINK_FRAME_SPACE_PHY_MASK.load(Ordering::Acquire) as u8;
+                let type_bits = LINK_FRAME_SPACE_TYPES.load(Ordering::Acquire) as u8;
+                let phys = PhyMask::new()
+                    .set_le_1m_phy(phy_bits == 0 || (phy_bits & 0x01) != 0)
+                    .set_le_2m_phy(phy_bits == 0 || (phy_bits & 0x02) != 0)
+                    .set_le_coded_phy(phy_bits == 0 || (phy_bits & 0x04) != 0);
+                let spacing_types = SpacingTypes::new()
+                    .set_t_ifs_acl_cp(type_bits == 0 || (type_bits & 0x01) != 0)
+                    .set_t_ifs_acl_pc(type_bits == 0 || (type_bits & 0x02) != 0)
+                    .set_t_mces((type_bits & 0x04) != 0)
+                    .set_t_ifs_cis((type_bits & 0x08) != 0)
+                    .set_t_mss_cis((type_bits & 0x10) != 0);
+                let _ = conn
+                    .update_frame_space(
+                        stack,
+                        Duration::from_micros(min_us),
+                        Duration::from_micros(max_us),
+                        phys,
+                        spacing_types,
+                    )
+                    .await;
+            }
+        }
+        LCMD_CONNECTION_RATE => {
+            let min_ms = LINK_CONN_MIN_MS.load(Ordering::Acquire);
+            let max_ms = LINK_CONN_MAX_MS.load(Ordering::Acquire);
+            let timeout_ms = LINK_CONN_TIMEOUT_MS.load(Ordering::Acquire);
+            let subrate_min = LINK_RATE_SUBRATE_MIN.load(Ordering::Acquire);
+            let subrate_max = LINK_RATE_SUBRATE_MAX.load(Ordering::Acquire);
+            let params = ConnectRateParams {
+                min_connection_interval: Duration::from_millis(if min_ms == 0 {
+                    80
+                } else {
+                    min_ms as u64
+                }),
+                max_connection_interval: Duration::from_millis(if max_ms == 0 {
+                    80
+                } else {
+                    max_ms as u64
+                }),
+                subrate_min: if subrate_min == 0 {
+                    1
+                } else {
+                    subrate_min.min(u16::MAX as usize) as u16
+                },
+                subrate_max: if subrate_max == 0 {
+                    1
+                } else {
+                    subrate_max.min(u16::MAX as usize) as u16
+                },
+                max_latency: LINK_CONN_LATENCY
+                    .load(Ordering::Acquire)
+                    .min(u16::MAX as usize) as u16,
+                continuation_number: LINK_RATE_CONTINUATION
+                    .load(Ordering::Acquire)
+                    .min(u16::MAX as usize) as u16,
+                supervision_timeout: Duration::from_millis(if timeout_ms == 0 {
+                    8000
+                } else {
+                    timeout_ms as u64
+                }),
+                min_ce_length: Duration::from_secs(0),
+                max_ce_length: Duration::from_secs(0),
+            };
+            if params.min_connection_interval <= params.max_connection_interval
+                && params.subrate_min <= params.subrate_max
+            {
+                let _ = conn.request_connection_rate(stack, &params).await;
+            } else {
+                log_str(cfg, "[link] invalid connection rate\0");
             }
         }
         LCMD_SECURITY_REQUEST => {
