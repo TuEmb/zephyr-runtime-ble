@@ -34,7 +34,7 @@ use trouble_host::attribute::{
 };
 use trouble_host::connection::RequestedConnParams;
 #[cfg(feature = "central")]
-use trouble_host::connection::{ConnectConfig, ScanConfig};
+use trouble_host::connection::{ConnectConfig, PhySet, ScanConfig};
 #[cfg(feature = "central")]
 use trouble_host::gatt::GattClient;
 #[cfg(feature = "l2cap")]
@@ -56,6 +56,7 @@ use crate::{
     CENTRAL_ADDR_KIND, CENTRAL_CMD, CENTRAL_HANDLE, CENTRAL_UUID, CENTRAL_UUID_LEN, SCAN_ACTIVE,
     SCAN_INTERVAL_MS, SCAN_TIMEOUT_MS, SCAN_WINDOW_MS,
     SCAN_FILTER_ADDR, SCAN_FILTER_ADDR_ENABLED, SCAN_FILTER_ADDR_KIND, SCAN_FILTER_DUPLICATES,
+    SCAN_PHY_OPTIONS,
 };
 #[cfg(feature = "l2cap")]
 use crate::{L2CAP_SEND_BUF, L2CAP_SEND_LEN, L2CAP_SEND_REQ};
@@ -901,10 +902,10 @@ async fn link_control_once(
 ) {
     match LINK_CMD.swap(LCMD_NONE, Ordering::AcqRel) {
         LCMD_SET_PHY => {
-            let phy = if LINK_PHY.load(Ordering::Acquire) == 2 {
-                trouble_host::prelude::PhyKind::Le2M
-            } else {
-                trouble_host::prelude::PhyKind::Le1M
+            let phy = match LINK_PHY.load(Ordering::Acquire) {
+                2 => trouble_host::prelude::PhyKind::Le2M,
+                3 => trouble_host::prelude::PhyKind::LeCoded,
+                _ => trouble_host::prelude::PhyKind::Le1M,
             };
             let _ = conn.set_phy(stack, phy).await;
         }
@@ -1206,6 +1207,7 @@ async fn run_scan(
     let scan_config = ScanConfig {
         active: SCAN_ACTIVE.load(Ordering::Acquire),
         filter_accept_list,
+        phys: scan_phys(),
         interval: Duration::from_millis(if interval_ms == 0 {
             100
         } else {
@@ -1263,6 +1265,19 @@ async fn run_scan(
             _ => {}
         }
         Timer::after(Duration::from_millis(30)).await;
+    }
+}
+
+#[cfg(feature = "central")]
+fn scan_phys() -> PhySet {
+    match SCAN_PHY_OPTIONS.load(Ordering::Acquire) & 0x0e {
+        0x04 => PhySet::M2,
+        0x08 => PhySet::Coded,
+        0x06 => PhySet::M1M2,
+        0x0a => PhySet::M1Coded,
+        0x0c => PhySet::M2Coded,
+        0x0e => PhySet::M1M2Coded,
+        _ => PhySet::M1,
     }
 }
 

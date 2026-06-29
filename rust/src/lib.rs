@@ -326,6 +326,7 @@ pub(crate) static SCAN_INTERVAL_MS: AtomicUsize = AtomicUsize::new(0);
 pub(crate) static SCAN_WINDOW_MS: AtomicUsize = AtomicUsize::new(0);
 pub(crate) static SCAN_TIMEOUT_MS: AtomicUsize = AtomicUsize::new(0);
 pub(crate) static SCAN_FILTER_DUPLICATES: AtomicBool = AtomicBool::new(false);
+pub(crate) static SCAN_PHY_OPTIONS: AtomicUsize = AtomicUsize::new(0);
 pub(crate) static SCAN_FILTER_ADDR_ENABLED: AtomicBool = AtomicBool::new(false);
 pub(crate) static mut SCAN_FILTER_ADDR: [u8; 6] = [0; 6];
 pub(crate) static SCAN_FILTER_ADDR_KIND: AtomicUsize = AtomicUsize::new(0);
@@ -573,6 +574,7 @@ pub extern "C" fn runtime_ble_scan_start_ex(
         SCAN_WINDOW_MS.store(window_ms as usize, Ordering::Release);
         SCAN_TIMEOUT_MS.store(timeout_ms as usize, Ordering::Release);
         SCAN_FILTER_DUPLICATES.store(options & 0x01 != 0, Ordering::Release);
+        SCAN_PHY_OPTIONS.store((options & 0x0e) as usize, Ordering::Release);
         SCAN_FILTER_ADDR_ENABLED.store(!filter_addr.is_null(), Ordering::Release);
         if !filter_addr.is_null() {
             unsafe {

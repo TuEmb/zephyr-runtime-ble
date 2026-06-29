@@ -172,7 +172,10 @@ can also be a **central / GATT client** — build the central-capable lib
 `config.role = RUNTIME_BLE_ROLE_CENTRAL`:
 ```c
 runtime_ble_scan_start(1, 100, 50, 0);  // active scan; results -> on_scan_result
-runtime_ble_scan_start_ex(1, 100, 50, 0, RUNTIME_BLE_SCAN_OPT_FILTER_DUPLICATES,
+runtime_ble_scan_start_ex(1, 100, 50, 0,
+                          RUNTIME_BLE_SCAN_OPT_FILTER_DUPLICATES |
+                          RUNTIME_BLE_SCAN_OPT_PHY_1M |
+                          RUNTIME_BLE_SCAN_OPT_PHY_CODED,
                           NULL, 0);    // scan with controller duplicate filtering
 runtime_ble_scan_stop();
 runtime_ble_connect_addr(addr, RUNTIME_BLE_ADDR_RANDOM);
@@ -189,8 +192,9 @@ Use `on_scan_result_ext` when the central needs the peer's address type; pass
 that value to `runtime_ble_connect_addr()` or `config.peer_address_kind`.
 Use `on_scan_result_meta` when the scanner also needs report metadata such as
 connectable/scannable, scan-response, legacy/extended, PHY, TX power, and SID.
-Use `runtime_ble_scan_start_ex()` to enable controller duplicate filtering or
-limit scan reports to one peer address with the controller accept list.
+Use `runtime_ble_scan_start_ex()` to enable controller duplicate filtering,
+select scan PHYs (1M, 2M, coded), or limit scan reports to one peer address
+with the controller accept list.
 See [`examples/gatt_client/`](examples/gatt_client/) (HW-verified
 against the peripheral echo example). The role is feature-gated so peripheral-
 only apps stay on the lean default lib (see [`rust/README.md`](rust/README.md)).
