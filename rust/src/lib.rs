@@ -142,6 +142,8 @@ pub struct RuntimeBleConfig {
     pub adv_service_uuid_len: u8,
     pub scan_response_data: *const u8,
     pub scan_response_data_len: u8,
+    /// 1 = non-connectable advertising/beacon; 0 = connectable GATT server.
+    pub nonconnectable: u8,
     /// Advertising interval window in milliseconds (0 -> 30 / 60 default).
     pub adv_interval_min_ms: u16,
     pub adv_interval_max_ms: u16,
@@ -172,6 +174,7 @@ pub(crate) struct RuntimeCfg {
     pub adv_service_uuid_len: u8,
     pub scan_response_data: *const u8,
     pub scan_response_data_len: u8,
+    pub nonconnectable: u8,
     pub adv_interval_min_ms: u16,
     pub adv_interval_max_ms: u16,
     pub discoverable: u8,
@@ -264,6 +267,7 @@ pub extern "C" fn runtime_ble_init(cfg: *const RuntimeBleConfig) -> c_int {
             adv_service_uuid_len: c.adv_service_uuid_len,
             scan_response_data: c.scan_response_data,
             scan_response_data_len: c.scan_response_data_len,
+            nonconnectable: c.nonconnectable,
             adv_interval_min_ms: c.adv_interval_min_ms,
             adv_interval_max_ms: c.adv_interval_max_ms,
             discoverable: c.discoverable,

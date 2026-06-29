@@ -8,6 +8,7 @@ and `boards/<board>.conf` overlays apply any board-specific tweaks.
 | Example | Feature | Lib variant needed |
 |---|---|---|
 | [`gatt_server/`](gatt_server/) | Peripheral + user-defined GATT (echo) | `libruntime_ble.a` (default) |
+| [`beacon/`](beacon/) | Non-connectable beacon/broadcast advertising | `libruntime_ble.a` (default) |
 | [`gatt_client/`](gatt_client/) | Central: active/passive scan, connect + discover/read/write/subscribe | `libruntime_ble_central.a` (`CONFIG_RUNTIME_BLE_CENTRAL=y`) |
 | [`l2cap_peripheral/`](l2cap_peripheral/) | L2CAP CoC echo server | `libruntime_ble_l2cap.a` (`CONFIG_RUNTIME_BLE_L2CAP=y`) |
 | [`l2cap_central/`](l2cap_central/) | Central that opens an L2CAP channel | `libruntime_ble_central_l2cap.a` (both) |
@@ -21,7 +22,7 @@ box. To rebuild a variant after editing `rust/`, use the matching Cargo feature
 ## Build (any board)
 
 ```sh
-cd gatt_server            # or gatt_client / l2cap_peripheral / l2cap_central
+cd gatt_server            # or beacon / gatt_client / l2cap_peripheral / l2cap_central
 west init -l .
 west update               # clones Zephyr + zephyr-runtime-ble
 west zephyr-export

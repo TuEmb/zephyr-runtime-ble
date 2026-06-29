@@ -1,0 +1,20 @@
+# Standalone west manifest for the runtime-ble beacon example.
+manifest:
+  remotes:
+    - name: zephyrproject
+      url-base: https://github.com/zephyrproject-rtos
+    - name: tuemb
+      url-base: https://github.com/TuEmb
+
+  projects:
+    - name: zephyr
+      remote: zephyrproject
+      revision: v4.4.1
+      import: true
+    - name: zephyr-runtime-ble
+      remote: tuemb
+      revision: main
+      path: modules/zephyr-runtime-ble
+
+  self:
+    path: beacon

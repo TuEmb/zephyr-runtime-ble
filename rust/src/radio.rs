@@ -998,8 +998,18 @@ async fn serve(
     stack: &Stack<'_, nrf_sdc::SoftdeviceController<'static>, DefaultPacketPool>,
     cfg: &RuntimeCfg,
 ) {
+    if cfg.nonconnectable != 0 {
+        while !UNLOAD_REQ.load(Ordering::Acquire) {
+            if advertise_nonconnectable(peripheral, cfg).await.is_ok() {
+                break;
+            }
+            Timer::after(Duration::from_secs(1)).await;
+        }
+        return;
+    }
+
     loop {
-        match advertise(peripheral, cfg).await {
+        match advertise_connectable(peripheral, cfg).await {
             Ok(conn) => {
                 if let Some(cb) = cfg.callbacks.on_connected {
                     cb(cfg.user);
@@ -1014,10 +1024,56 @@ async fn serve(
     }
 }
 
-async fn advertise<'a>(
+async fn advertise_connectable<'a>(
     peripheral: &mut Peripheral<'a, nrf_sdc::SoftdeviceController<'static>, DefaultPacketPool>,
     cfg: &RuntimeCfg,
 ) -> Result<Connection<'a, DefaultPacketPool>, BleHostError<nrf_sdc::Error>> {
+    let (adv, adv_len, scan_data, adv_params) = advertising_parts(cfg)?;
+    let advertiser = peripheral
+        .advertise(
+            &adv_params,
+            Advertisement::ConnectableScannableUndirected {
+                adv_data: &adv[..adv_len],
+                scan_data,
+            },
+        )
+        .await?;
+    Ok(advertiser.accept().await?)
+}
+
+async fn advertise_nonconnectable(
+    peripheral: &mut Peripheral<'_, nrf_sdc::SoftdeviceController<'static>, DefaultPacketPool>,
+    cfg: &RuntimeCfg,
+) -> Result<(), BleHostError<nrf_sdc::Error>> {
+    let (adv, adv_len, scan_data, adv_params) = advertising_parts(cfg)?;
+    if scan_data.is_empty() {
+        let _advertiser = peripheral
+            .advertise(
+                &adv_params,
+                Advertisement::NonconnectableNonscannableUndirected {
+                    adv_data: &adv[..adv_len],
+                },
+            )
+            .await?;
+        wait_unload().await;
+    } else {
+        let _advertiser = peripheral
+            .advertise(
+                &adv_params,
+                Advertisement::NonconnectableScannableUndirected {
+                    adv_data: &adv[..adv_len],
+                    scan_data,
+                },
+            )
+            .await?;
+        wait_unload().await;
+    }
+    Ok(())
+}
+
+fn advertising_parts<'a>(
+    cfg: &'a RuntimeCfg,
+) -> Result<([u8; 31], usize, &'a [u8], AdvertisementParameters), BleHostError<nrf_sdc::Error>> {
     let name = unsafe { cstr_or(cfg.device_name, "RUNTIME-BLE") };
     let flags = if cfg.discoverable == 2 {
         BR_EDR_NOT_SUPPORTED
@@ -1054,16 +1110,7 @@ async fn advertise<'a>(
         interval_max: Duration::from_millis(max_ms),
         ..Default::default()
     };
-    let advertiser = peripheral
-        .advertise(
-            &adv_params,
-            Advertisement::ConnectableScannableUndirected {
-                adv_data: &adv[..adv_len],
-                scan_data,
-            },
-        )
-        .await?;
-    Ok(advertiser.accept().await?)
+    Ok((adv, adv_len, scan_data, adv_params))
 }
 
 fn push_ad(dst: &mut [u8; 31], pos: &mut usize, ty: u8, data: &[u8]) -> bool {
