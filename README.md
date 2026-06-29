@@ -232,6 +232,8 @@ runtime_ble_client_write(handle, buf, n);
 runtime_ble_client_write_no_rsp(handle, buf, n);
 runtime_ble_client_read(handle);        // -> on_read(handle, …)
 runtime_ble_client_read_blob(handle, off);
+runtime_ble_client_read_by_uuid(start, end, uuid, uuid_len);
+                                        // -> on_read(handle, …) for matches
 runtime_ble_client_read_descriptor(desc_handle);
 runtime_ble_client_write_descriptor(desc_handle, buf, n);
                                         // long reads from an ATT offset
@@ -258,6 +260,8 @@ instead of notifications; both deliver incoming values via `on_notification`.
 Incoming client indications are confirmed automatically after the callback runs.
 Use `runtime_ble_client_read_blob()` to continue reading long attributes from a
 specific ATT offset; returned bytes still arrive through `on_read`.
+Use `runtime_ble_client_read_by_uuid()` to issue ATT Read By Type over a handle
+range when the central knows a characteristic UUID but not its value handle.
 Use the descriptor read/write helpers when `on_descriptor` has reported a
 descriptor handle; descriptor reads also return through `on_read`.
 Use `on_client_status` to observe completion/failure of GATT client commands;

@@ -13,11 +13,14 @@
  */
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>
+#include <string.h>
 #include "runtime_ble.h"
 
 /* Vendor service to discover (matches the peripheral echo example). */
 static const uint8_t svc_uuid[16] = {0x9e, 0xca, 0xdc, 0x24, 0x0e, 0xe5, 0xa9, 0xe0,
 				     0x93, 0xf3, 0xa3, 0xb5, 0x01, 0x00, 0x4c, 0xe5};
+static const uint8_t tx_uuid[16] = {0x9e, 0xca, 0xdc, 0x24, 0x0e, 0xe5, 0xa9, 0xe0,
+				    0x93, 0xf3, 0xa3, 0xb5, 0x03, 0x00, 0x4c, 0xe5};
 
 /* Peer BLE address, LSB first. Override with the peripheral's address. */
 #ifndef PEER0
@@ -30,7 +33,7 @@ static const uint8_t svc_uuid[16] = {0x9e, 0xca, 0xdc, 0x24, 0x0e, 0xe5, 0xa9, 0
 #endif
 static const uint8_t peer[6] = {PEER0, PEER1, PEER2, PEER3, PEER4, PEER5};
 
-static volatile uint16_t rx_handle, tx_handle, user_desc_handle;
+static volatile uint16_t rx_handle, tx_handle, user_desc_handle, svc_start, svc_end;
 static volatile int discovered;
 static volatile int connected;
 static volatile int scan_printed;
@@ -106,6 +109,10 @@ static void on_discovered(uint16_t h, const uint8_t *uuid, uint8_t ul, uint16_t 
 static void on_service(uint16_t start, uint16_t end, const uint8_t *uuid, uint8_t ul, void *u)
 {
 	ARG_UNUSED(u);
+	if (ul == sizeof(svc_uuid) && memcmp(uuid, svc_uuid, sizeof(svc_uuid)) == 0) {
+		svc_start = start;
+		svc_end = end;
+	}
 	printk("[app] service handles=%u-%u uuid_len=%u uuid0=0x%02x\n",
 	       start, end, ul, ul > 0 ? uuid[0] : 0);
 }
@@ -217,6 +224,11 @@ int main(void)
 	k_sleep(K_MSEC(1000));
 
 	if (discovered >= 2) {
+		if (svc_start != 0) {
+			printk("[app] read TX by UUID in service range %u-%u\n", svc_start, svc_end);
+			runtime_ble_client_read_by_uuid(svc_start, svc_end, tx_uuid, sizeof(tx_uuid));
+			k_sleep(K_MSEC(500));
+		}
 		printk("[app] discovering TX descriptors near handle=%u\n", tx_handle);
 		runtime_ble_client_discover_descriptors(tx_handle + 1, tx_handle + 4);
 		k_sleep(K_MSEC(500));

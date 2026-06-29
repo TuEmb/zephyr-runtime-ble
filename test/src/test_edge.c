@@ -95,8 +95,13 @@ ZTEST(runtime_ble_edge, test_central_indicate_subscribe_requires_central_lib)
 
 ZTEST(runtime_ble_edge, test_central_read_blob_requires_central_lib)
 {
+	const uint8_t uuid[2] = {0x0a, 0x2a};
+
 	zassert_equal(runtime_ble_client_read_blob(1, 4), RUNTIME_BLE_ERR_INVALID,
 		      "default peripheral lib must reject central read blob");
+	zassert_equal(runtime_ble_client_read_by_uuid(1, 2, uuid, sizeof(uuid)),
+		      RUNTIME_BLE_ERR_INVALID,
+		      "default peripheral lib must reject central read by UUID");
 }
 
 ZTEST(runtime_ble_edge, test_central_descriptor_access_requires_central_lib)

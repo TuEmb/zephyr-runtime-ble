@@ -52,11 +52,12 @@ use crate::{
 #[cfg(feature = "central")]
 use crate::{
     CCMD_CONNECT, CCMD_DISCONNECT, CCMD_DISCOVER, CCMD_DISCOVER_ALL, CCMD_DISCOVER_DESCRIPTORS,
-    CCMD_DISCOVER_SERVICES, CCMD_NONE, CCMD_READ, CCMD_READ_BLOB, CCMD_SCAN_START, CCMD_SCAN_STOP,
-    CCMD_SUBSCRIBE, CCMD_SUBSCRIBE_INDICATE, CCMD_WRITE, CCMD_WRITE_NO_RSP, CENTRAL_ADDR,
-    CENTRAL_ADDR_KIND, CENTRAL_CMD, CENTRAL_HANDLE, CENTRAL_UUID, CENTRAL_UUID_LEN, SCAN_ACTIVE,
-    SCAN_FILTER_ADDR, SCAN_FILTER_ADDR_ENABLED, SCAN_FILTER_ADDR_KIND, SCAN_FILTER_DUPLICATES,
-    SCAN_INTERVAL_MS, SCAN_PHY_OPTIONS, SCAN_TIMEOUT_MS, SCAN_WINDOW_MS,
+    CCMD_DISCOVER_SERVICES, CCMD_NONE, CCMD_READ, CCMD_READ_BLOB, CCMD_READ_BY_UUID,
+    CCMD_SCAN_START, CCMD_SCAN_STOP, CCMD_SUBSCRIBE, CCMD_SUBSCRIBE_INDICATE, CCMD_WRITE,
+    CCMD_WRITE_NO_RSP, CENTRAL_ADDR, CENTRAL_ADDR_KIND, CENTRAL_CMD, CENTRAL_HANDLE, CENTRAL_UUID,
+    CENTRAL_UUID_LEN, SCAN_ACTIVE, SCAN_FILTER_ADDR, SCAN_FILTER_ADDR_ENABLED,
+    SCAN_FILTER_ADDR_KIND, SCAN_FILTER_DUPLICATES, SCAN_INTERVAL_MS, SCAN_PHY_OPTIONS,
+    SCAN_TIMEOUT_MS, SCAN_WINDOW_MS,
 };
 #[cfg(feature = "l2cap")]
 use crate::{L2CAP_DISCONNECT_REQ, L2CAP_SEND_BUF, L2CAP_SEND_LEN, L2CAP_SEND_REQ};
@@ -1510,6 +1511,7 @@ async fn client_session(
                 CCMD_DISCOVER => client_discover(&client, &store, cfg).await,
                 CCMD_DISCOVER_ALL => client_discover_all(&client, &store, cfg).await,
                 CCMD_DISCOVER_DESCRIPTORS => client_discover_descriptors(&client, cfg).await,
+                CCMD_READ_BY_UUID => client_read_by_uuid(&client, cfg).await,
                 cmd @ (CCMD_READ | CCMD_READ_BLOB) => {
                     let packed = CENTRAL_HANDLE.load(Ordering::Acquire);
                     let h = packed as u16;
@@ -1653,6 +1655,8 @@ const CLIENT_OP_WRITE_NO_RSP: u8 = 8;
 const CLIENT_OP_SUBSCRIBE: u8 = 9;
 #[cfg(feature = "central")]
 const CLIENT_OP_SUBSCRIBE_INDICATE: u8 = 10;
+#[cfg(feature = "central")]
+const CLIENT_OP_READ_BY_UUID: u8 = 11;
 
 #[cfg(feature = "central")]
 fn emit_client_status(cfg: &RuntimeCfg, op: u8, status: i8, handle: u16) {
@@ -1780,6 +1784,34 @@ async fn client_discover_descriptors(client: &ClientP<'_>, cfg: &RuntimeCfg) {
     emit_client_status(
         cfg,
         CLIENT_OP_DISCOVER_DESCRIPTORS,
+        if result.is_ok() {
+            CLIENT_STATUS_OK
+        } else {
+            CLIENT_STATUS_FAILED
+        },
+        start,
+    );
+}
+
+#[cfg(feature = "central")]
+async fn client_read_by_uuid(client: &ClientP<'_>, cfg: &RuntimeCfg) {
+    let packed = CENTRAL_HANDLE.load(Ordering::Acquire);
+    let start = (packed >> 16) as u16;
+    let end = packed as u16;
+    let len = CENTRAL_UUID_LEN.load(Ordering::Acquire) as u8;
+    let uuid = unsafe { uuid_from(core::ptr::addr_of!(CENTRAL_UUID) as *const u8, len) };
+    let result = client
+        .read_by_type(start, end, &uuid, |handle, data| {
+            if let Some(cb) = cfg.callbacks.on_read {
+                let n = data.len().min(VALUE_LEN);
+                cb(handle, data.as_ptr(), n, cfg.user);
+            }
+            core::ops::ControlFlow::<()>::Continue(())
+        })
+        .await;
+    emit_client_status(
+        cfg,
+        CLIENT_OP_READ_BY_UUID,
         if result.is_ok() {
             CLIENT_STATUS_OK
         } else {

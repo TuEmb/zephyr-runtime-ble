@@ -122,6 +122,7 @@ extern "C" {
 #define RUNTIME_BLE_CLIENT_OP_WRITE_NO_RSP         8
 #define RUNTIME_BLE_CLIENT_OP_SUBSCRIBE            9
 #define RUNTIME_BLE_CLIENT_OP_SUBSCRIBE_INDICATE   10
+#define RUNTIME_BLE_CLIENT_OP_READ_BY_UUID         11
 
 /* Opaque bond blob format used by on_bond_load/on_bond_store. Store the bytes as
  * given; the first byte is a runtime-managed format version. */
@@ -489,6 +490,11 @@ int runtime_ble_client_read(uint16_t handle);
 
 /* Read a long attribute value starting at an ATT offset; bytes arrive via on_read. */
 int runtime_ble_client_read_blob(uint16_t handle, uint16_t offset);
+
+/* Read characteristic values by UUID within a handle range; each matching value
+ * arrives via on_read(handle, data, len). */
+int runtime_ble_client_read_by_uuid(uint16_t start_handle, uint16_t end_handle,
+				    const uint8_t *uuid, uint8_t uuid_len);
 
 /* Read a descriptor by attribute handle; the value arrives via on_read. */
 int runtime_ble_client_read_descriptor(uint16_t handle);

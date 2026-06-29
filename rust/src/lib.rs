@@ -392,6 +392,7 @@ pub(crate) const CCMD_SUBSCRIBE_INDICATE: u32 = 11;
 pub(crate) const CCMD_READ_BLOB: u32 = 12;
 pub(crate) const CCMD_DISCOVER_ALL: u32 = 13;
 pub(crate) const CCMD_DISCOVER_SERVICES: u32 = 14;
+pub(crate) const CCMD_READ_BY_UUID: u32 = 15;
 pub(crate) static CENTRAL_CMD: AtomicU32 = AtomicU32::new(CCMD_NONE);
 /// Attribute handle (read/write/subscribe) for the pending command.
 pub(crate) static CENTRAL_HANDLE: AtomicU32 = AtomicU32::new(0);
@@ -832,6 +833,42 @@ pub extern "C" fn runtime_ble_client_read(handle: u16) -> c_int {
 #[no_mangle]
 pub extern "C" fn runtime_ble_client_read_blob(handle: u16, offset: u16) -> c_int {
     central_cmd(CCMD_READ_BLOB, ((offset as u32) << 16) | handle as u32)
+}
+
+#[no_mangle]
+pub extern "C" fn runtime_ble_client_read_by_uuid(
+    start_handle: u16,
+    end_handle: u16,
+    uuid: *const u8,
+    uuid_len: u8,
+) -> c_int {
+    #[cfg(feature = "central")]
+    {
+        if start_handle == 0
+            || end_handle < start_handle
+            || uuid.is_null()
+            || (uuid_len != 2 && uuid_len != 16)
+        {
+            return RUNTIME_BLE_ERR_INVALID;
+        }
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                uuid,
+                core::ptr::addr_of_mut!(CENTRAL_UUID) as *mut u8,
+                uuid_len as usize,
+            );
+        }
+        CENTRAL_UUID_LEN.store(uuid_len as usize, Ordering::Release);
+        central_cmd(
+            CCMD_READ_BY_UUID,
+            ((start_handle as u32) << 16) | end_handle as u32,
+        )
+    }
+    #[cfg(not(feature = "central"))]
+    {
+        let _ = (start_handle, end_handle, uuid, uuid_len);
+        RUNTIME_BLE_ERR_INVALID
+    }
 }
 
 #[no_mangle]
