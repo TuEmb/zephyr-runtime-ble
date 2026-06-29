@@ -26,6 +26,23 @@ static void on_subscription(uint16_t chr, uint8_t notify_enabled, uint8_t indica
 	ARG_UNUSED(user);
 }
 
+static size_t on_bond_load(uint8_t index, uint8_t *out, size_t max_len, void *user)
+{
+	ARG_UNUSED(index);
+	ARG_UNUSED(out);
+	ARG_UNUSED(max_len);
+	ARG_UNUSED(user);
+	return 0;
+}
+
+static void on_bond_store(uint8_t index, const uint8_t *blob, size_t len, void *user)
+{
+	ARG_UNUSED(index);
+	ARG_UNUSED(blob);
+	ARG_UNUSED(len);
+	ARG_UNUSED(user);
+}
+
 static const runtime_ble_config_t cfg = {
 	.device_name = "RTBLE-TEST",
 	.manufacturer_id = 0xFFFF,
@@ -34,6 +51,8 @@ static const runtime_ble_config_t cfg = {
 	/* services == NULL -> built-in Nordic UART Service. */
 	.callbacks = {
 		.on_subscription = on_subscription,
+		.on_bond_load = on_bond_load,
+		.on_bond_store = on_bond_store,
 		.on_log = on_log,
 	},
 };

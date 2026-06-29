@@ -16,6 +16,7 @@ use core::pin::pin;
 use core::sync::atomic::Ordering;
 use core::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 
+use bt_hci::param::{AddrKind, BdAddr};
 use embassy_futures::join::join;
 use embassy_futures::select::{select, select3};
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
@@ -34,6 +35,7 @@ use trouble_host::gatt::GattClient;
 #[cfg(feature = "l2cap")]
 use trouble_host::l2cap::{L2capChannel, L2capChannelConfig};
 use trouble_host::prelude::*;
+use trouble_host::{BondInformation, Identity, IdentityResolvingKey, LongTermKey};
 #[cfg(feature = "central")]
 use trouble_host::scan::Scanner;
 
@@ -147,6 +149,9 @@ pub extern "C" fn runtime_alarm_fired() {
 // ---------------------------------------------------------------------------
 pub(crate) const VALUE_LEN: usize = 244;
 const ATT_MAX: usize = 64;
+const BOND_BLOB_LEN: usize = 43;
+const BOND_BLOB_VERSION: u8 = 1;
+const BOND_SLOT_CAP: usize = 4;
 // The central-capable builds allow two simultaneous links so a device can be a
 // peripheral (server) and a central (client) at the same time (RUNTIME_BLE_ROLE_DUAL).
 #[cfg(feature = "central")]
@@ -278,6 +283,7 @@ struct Gatt {
     nus_rx: usize,
     nus_tx: usize,
     stores: Vec<*mut [u8; VALUE_LEN]>,
+    bond_slots: RefCell<heapless::Vec<(Identity, u8), BOND_SLOT_CAP>>,
 }
 
 fn build_gatt(cfg: &RuntimeCfg, name: &'static str) -> Option<Gatt> {
@@ -365,6 +371,7 @@ fn build_gatt(cfg: &RuntimeCfg, name: &'static str) -> Option<Gatt> {
         nus_rx,
         nus_tx,
         stores,
+        bond_slots: RefCell::new(heapless::Vec::new()),
     })
 }
 
@@ -413,6 +420,7 @@ pub(crate) fn serve_session(
         None => return,
     };
     let server: &Srv = &gatt.server;
+    restore_bonds(stack, cfg, &gatt.bond_slots);
 
     let mut peripheral = stack.peripheral();
     let runner = stack.runner();
@@ -442,12 +450,14 @@ pub(crate) fn serve_session(
         server,
         chars,
         props,
+        bond_slots,
         stores,
         ..
     } = gatt;
     drop(server);
     drop(chars);
     drop(props);
+    drop(bond_slots);
     for ptr in stores {
         // SAFETY: each ptr came from alloc_store (Box::into_raw); the table that
         // held the only `&'static mut` to it has just been dropped.
@@ -534,6 +544,119 @@ fn security_level_to_c(level: trouble_host::prelude::SecurityLevel) -> u8 {
         trouble_host::prelude::SecurityLevel::Encrypted => 1,
         trouble_host::prelude::SecurityLevel::NoEncryption => 0,
     }
+}
+
+fn c_to_security_level(level: u8) -> Option<trouble_host::prelude::SecurityLevel> {
+    match level {
+        0 => Some(trouble_host::prelude::SecurityLevel::NoEncryption),
+        1 => Some(trouble_host::prelude::SecurityLevel::Encrypted),
+        2 => Some(trouble_host::prelude::SecurityLevel::EncryptedAuthenticated),
+        _ => None,
+    }
+}
+
+fn bond_slot_count(cfg: &RuntimeCfg) -> u8 {
+    let n = if cfg.bond_slot_count == 0 {
+        BOND_SLOT_CAP as u8
+    } else {
+        cfg.bond_slot_count
+    };
+    n.min(BOND_SLOT_CAP as u8)
+}
+
+fn serialize_bond(bond: &BondInformation, out: &mut [u8; BOND_BLOB_LEN]) -> usize {
+    out.fill(0);
+    out[0] = BOND_BLOB_VERSION;
+    out[1] = u8::from(bond.is_bonded) | u8::from(bond.identity.irk.is_some()) << 1;
+    out[2] = security_level_to_c(bond.security_level);
+    out[3] = bond.identity.addr.kind.as_raw();
+    out[4..10].copy_from_slice(bond.identity.addr.addr.raw());
+    out[10..26].copy_from_slice(&bond.ltk.to_le_bytes());
+    if let Some(irk) = bond.identity.irk {
+        out[26..42].copy_from_slice(&irk.to_le_bytes());
+    }
+    BOND_BLOB_LEN
+}
+
+fn deserialize_bond(blob: &[u8]) -> Option<BondInformation> {
+    if blob.len() < 42 || blob[0] != BOND_BLOB_VERSION {
+        return None;
+    }
+    let security_level = c_to_security_level(blob[2])?;
+    let mut addr = [0u8; 6];
+    addr.copy_from_slice(&blob[4..10]);
+    let mut ltk = [0u8; 16];
+    ltk.copy_from_slice(&blob[10..26]);
+    let irk = if blob[1] & 0x02 != 0 {
+        let mut raw = [0u8; 16];
+        raw.copy_from_slice(&blob[26..42]);
+        IdentityResolvingKey::from_le_bytes(raw)
+    } else {
+        None
+    };
+    Some(BondInformation::new(
+        Identity {
+            addr: Address::new(AddrKind::new(blob[3]), BdAddr::new(addr)),
+            irk,
+        },
+        LongTermKey::from_le_bytes(ltk),
+        security_level,
+        blob[1] & 0x01 != 0,
+    ))
+}
+
+fn restore_bonds(
+    stack: &Stack<'_, nrf_sdc::SoftdeviceController<'static>, DefaultPacketPool>,
+    cfg: &RuntimeCfg,
+    slots: &RefCell<heapless::Vec<(Identity, u8), BOND_SLOT_CAP>>,
+) {
+    let Some(load) = cfg.callbacks.on_bond_load else {
+        return;
+    };
+    for index in 0..bond_slot_count(cfg) {
+        let mut blob = [0u8; BOND_BLOB_LEN];
+        let len = load(index, blob.as_mut_ptr(), blob.len(), cfg.user).min(blob.len());
+        if len == 0 {
+            continue;
+        }
+        let Some(bond) = deserialize_bond(&blob[..len]) else {
+            log_str(cfg, "[security] ignored invalid bond blob\0");
+            continue;
+        };
+        let identity = bond.identity;
+        if stack.add_bond_information(bond).is_ok() {
+            let _ = slots.borrow_mut().push((identity, index));
+        }
+    }
+}
+
+fn store_bond(
+    cfg: &RuntimeCfg,
+    slots: &RefCell<heapless::Vec<(Identity, u8), BOND_SLOT_CAP>>,
+    bond: &BondInformation,
+) {
+    let Some(store) = cfg.callbacks.on_bond_store else {
+        return;
+    };
+    let slot_count = bond_slot_count(cfg);
+    if slot_count == 0 {
+        return;
+    }
+    let mut slot = 0u8;
+    {
+        let mut map = slots.borrow_mut();
+        if let Some((_, existing)) = map.iter().find(|(identity, _)| *identity == bond.identity) {
+            slot = *existing;
+        } else if map.len() < slot_count as usize {
+            slot = map.len() as u8;
+            let _ = map.push((bond.identity, slot));
+        } else if !map.is_empty() {
+            map[0] = (bond.identity, 0);
+        }
+    }
+    let mut blob = [0u8; BOND_BLOB_LEN];
+    let len = serialize_bond(bond, &mut blob);
+    store(slot, blob.as_ptr(), len, cfg.user);
 }
 
 fn emit_security_event(
@@ -730,6 +853,8 @@ pub(crate) fn serve_central(
     stack: &Stack<'_, nrf_sdc::SoftdeviceController<'static>, DefaultPacketPool>,
     cfg: &RuntimeCfg,
 ) {
+    let bond_slots = RefCell::new(heapless::Vec::new());
+    restore_bonds(stack, cfg, &bond_slots);
     // The host runner must run concurrently so HCI events (connection complete,
     // ATT responses, notifications) are processed while we connect and talk.
     let runner = stack.runner();
@@ -1354,6 +1479,9 @@ async fn connection_task(
                     security_level,
                     bond,
                 } => {
+                    if let Some(b) = bond.as_ref() {
+                        store_bond(cfg, &gatt.bond_slots, b);
+                    }
                     emit_security_event(
                         cfg,
                         4,
@@ -1384,6 +1512,9 @@ async fn connection_task(
                     security_level,
                     bond,
                 } => {
+                    if let Some(b) = bond.as_ref() {
+                        store_bond(cfg, &gatt.bond_slots, b);
+                    }
                     emit_security_event(
                         cfg,
                         7,

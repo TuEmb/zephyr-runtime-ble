@@ -12,6 +12,7 @@
  */
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>
+#include <string.h>
 #include "runtime_ble.h"
 
 /* Custom 128-bit UUIDs, little-endian byte order.
@@ -46,6 +47,9 @@ static const uint8_t mfg_data[] = {0x52, 0x42, 0x01};
 static const uint8_t scan_rsp[] = {
 	12, 0x09, 'R', 'U', 'N', 'T', 'I', 'M', 'E', '-', 'B', 'L', 'E'
 };
+
+static uint8_t bond_blob[RUNTIME_BLE_BOND_BLOB_MAX];
+static size_t bond_blob_len;
 
 static void on_log(const char *line, void *user)
 {
@@ -93,6 +97,28 @@ static void on_security_event(uint8_t event, uint8_t level, uint32_t passkey, ui
 	}
 }
 
+static size_t on_bond_load(uint8_t index, uint8_t *out, size_t max_len, void *user)
+{
+	ARG_UNUSED(user);
+	if (index != 0 || bond_blob_len == 0 || max_len < bond_blob_len) {
+		return 0;
+	}
+	memcpy(out, bond_blob, bond_blob_len);
+	printk("[app] restored bond blob len=%u\n", (unsigned int)bond_blob_len);
+	return bond_blob_len;
+}
+
+static void on_bond_store(uint8_t index, const uint8_t *blob, size_t len, void *user)
+{
+	ARG_UNUSED(user);
+	if (index != 0 || len > sizeof(bond_blob)) {
+		return;
+	}
+	memcpy(bond_blob, blob, len);
+	bond_blob_len = len;
+	printk("[app] stored bond blob len=%u\n", (unsigned int)len);
+}
+
 int main(void)
 {
 	static const runtime_ble_config_t cfg = {
@@ -111,12 +137,15 @@ int main(void)
 		.services = my_services,
 		.num_services = 1,
 		.security_bondable = 1,
+		.bond_slot_count = 1,
 		.callbacks = {
 			.on_connected = on_connected,
 			.on_disconnected = on_disconnected,
 			.on_write = on_write,
 			.on_subscription = on_subscription,
 			.on_security_event = on_security_event,
+			.on_bond_load = on_bond_load,
+			.on_bond_store = on_bond_store,
 			.on_log = on_log,
 		},
 		.user = NULL,

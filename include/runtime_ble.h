@@ -68,6 +68,11 @@ extern "C" {
 
 #define RUNTIME_BLE_SECURITY_FLAG_BONDED (1u << 0)
 
+/* Opaque bond blob format used by on_bond_load/on_bond_store. Store the bytes as
+ * given; the first byte is a runtime-managed format version. */
+#define RUNTIME_BLE_BOND_BLOB_MAX 43
+#define RUNTIME_BLE_BOND_SLOTS_DEFAULT 4
+
 /* ---- Optional user-defined GATT ----
  * Characteristic property bitmask. */
 #define RUNTIME_BLE_PROP_READ        (1u << 0)
@@ -144,6 +149,12 @@ typedef struct {
 	 * `flags` currently uses RUNTIME_BLE_SECURITY_FLAG_BONDED. */
 	void (*on_security_event)(uint8_t event, uint8_t level, uint32_t passkey,
 				  uint8_t flags, void *user);
+	/* Persistent bonding. `on_bond_load` is called at runtime load for slot
+	 * indices [0, bond_slot_count); return the blob length copied to out, or 0
+	 * for an empty slot. `on_bond_store` is called when a new/updated bond is
+	 * produced; persist blob bytes under the given slot index. */
+	size_t (*on_bond_load)(uint8_t index, uint8_t *out, size_t max_len, void *user);
+	void (*on_bond_store)(uint8_t index, const uint8_t *blob, size_t len, void *user);
 
 	/* Optional text log line (NUL-terminated) for the app's console. */
 	void (*on_log)(const char *line, void *user);
@@ -204,6 +215,7 @@ typedef struct {
 	 * encryption immediately after a link connects. */
 	uint8_t                 security_bondable;
 	uint8_t                 security_request_on_connect;
+	uint8_t                 bond_slot_count;      /* 0 -> RUNTIME_BLE_BOND_SLOTS_DEFAULT */
 
 	runtime_ble_callbacks_t callbacks;
 	void                   *user;                 /* opaque, passed back to callbacks      */

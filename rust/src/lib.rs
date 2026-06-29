@@ -102,6 +102,12 @@ pub struct RuntimeBleCallbacks {
     /// Pairing/encryption event.
     pub on_security_event:
         Option<extern "C" fn(event: u8, level: u8, passkey: u32, flags: u8, user: *mut c_void)>,
+    /// Security: load a persistent bond blob from an application slot.
+    pub on_bond_load:
+        Option<extern "C" fn(index: u8, out: *mut u8, max_len: usize, user: *mut c_void) -> usize>,
+    /// Security: store a persistent bond blob to an application slot.
+    pub on_bond_store:
+        Option<extern "C" fn(index: u8, blob: *const u8, len: usize, user: *mut c_void)>,
     /// Optional NUL-terminated text log line for the app's console.
     pub on_log: Option<extern "C" fn(line: *const c_char, user: *mut c_void)>,
     /// L2CAP: channel established.
@@ -169,6 +175,7 @@ pub struct RuntimeBleConfig {
     pub l2cap_psm: u16,
     pub security_bondable: u8,
     pub security_request_on_connect: u8,
+    pub bond_slot_count: u8,
     pub callbacks: RuntimeBleCallbacks,
     pub user: *mut c_void,
 }
@@ -196,6 +203,7 @@ pub(crate) struct RuntimeCfg {
     pub l2cap_psm: u16,
     pub security_bondable: u8,
     pub security_request_on_connect: u8,
+    pub bond_slot_count: u8,
     pub callbacks: RuntimeBleCallbacks,
     pub user: *mut c_void,
 }
@@ -296,6 +304,7 @@ pub extern "C" fn runtime_ble_init(cfg: *const RuntimeBleConfig) -> c_int {
             l2cap_psm: c.l2cap_psm,
             security_bondable: c.security_bondable,
             security_request_on_connect: c.security_request_on_connect,
+            bond_slot_count: c.bond_slot_count,
             callbacks: c.callbacks,
             user: c.user,
         });
