@@ -69,6 +69,11 @@ extern "C" {
 #define RUNTIME_BLE_ADV_CH_ALL \
 	(RUNTIME_BLE_ADV_CH_37 | RUNTIME_BLE_ADV_CH_38 | RUNTIME_BLE_ADV_CH_39)
 
+#define RUNTIME_BLE_ADV_FILTER_NONE          0
+#define RUNTIME_BLE_ADV_FILTER_SCAN          1
+#define RUNTIME_BLE_ADV_FILTER_CONN          2
+#define RUNTIME_BLE_ADV_FILTER_SCAN_AND_CONN 3
+
 /* Frame spacing type bits for runtime_ble_update_frame_space(). */
 #define RUNTIME_BLE_FRAME_SPACE_ACL_CP (1u << 0)
 #define RUNTIME_BLE_FRAME_SPACE_ACL_PC (1u << 1)
@@ -357,6 +362,9 @@ typedef struct {
 	uint16_t                adv_interval_min_ms;  /* 0 -> 30 ms                            */
 	uint16_t                adv_interval_max_ms;  /* 0 -> 60 ms                            */
 	uint8_t                 adv_channel_map;      /* RUNTIME_BLE_ADV_CH_*; 0 -> all channels */
+	uint8_t                 adv_filter_policy;    /* RUNTIME_BLE_ADV_FILTER_* */
+	const uint8_t          *adv_accept_address;   /* optional 6-byte accept-list peer */
+	uint8_t                 adv_accept_address_kind; /* RUNTIME_BLE_ADDR_* */
 	uint8_t                 discoverable;         /* 0 general (default), 1 limited, 2 none */
 	const uint8_t          *address;              /* optional 6-byte static-random addr;   */
 	                                              /* NULL -> hwinfo-derived                */

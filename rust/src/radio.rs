@@ -29,7 +29,7 @@ use embassy_time::{Duration, Timer};
 use embassy_time_driver::Driver;
 use embassy_time_queue_utils::Queue;
 use nrf_sdc::mpsl::MultiprotocolServiceLayer;
-use trouble_host::advertise::{AdvChannelMap, TxPower};
+use trouble_host::advertise::{AdvChannelMap, AdvFilterPolicy, TxPower};
 use trouble_host::attribute::{
     AttPermissions, AttributeTable, Characteristic, CharacteristicProps, PermissionLevel, Service,
 };
@@ -2253,6 +2253,7 @@ async fn advertise_connectable<'a>(
     peripheral: &mut Peripheral<'a, nrf_sdc::SoftdeviceController<'static>, DefaultPacketPool>,
     cfg: &RuntimeCfg,
 ) -> Result<Connection<'a, DefaultPacketPool>, BleHostError<nrf_sdc::Error>> {
+    apply_adv_accept_list(peripheral, cfg).await?;
     if let Some(peer) = directed_peer(cfg) {
         let adv_params = advertising_params(cfg);
         let advertisement = if cfg.directed_high_duty != 0 {
@@ -2281,6 +2282,7 @@ async fn advertise_nonconnectable(
     peripheral: &mut Peripheral<'_, nrf_sdc::SoftdeviceController<'static>, DefaultPacketPool>,
     cfg: &RuntimeCfg,
 ) -> Result<(), BleHostError<nrf_sdc::Error>> {
+    apply_adv_accept_list(peripheral, cfg).await?;
     let (adv, adv_len, scan_data, adv_params) = advertising_parts(cfg)?;
     if scan_data.is_empty() {
         let _advertiser = peripheral
@@ -2303,6 +2305,19 @@ async fn advertise_nonconnectable(
             )
             .await?;
         wait_unload().await;
+    }
+    Ok(())
+}
+
+async fn apply_adv_accept_list(
+    peripheral: &mut Peripheral<'_, nrf_sdc::SoftdeviceController<'static>, DefaultPacketPool>,
+    cfg: &RuntimeCfg,
+) -> Result<(), BleHostError<nrf_sdc::Error>> {
+    if cfg.adv_filter_policy == 0 {
+        return Ok(());
+    }
+    if let Some(peer) = adv_accept_peer(cfg) {
+        peripheral.set_filter_accept_list(&[peer]).await?;
     }
     Ok(())
 }
@@ -2359,7 +2374,17 @@ fn advertising_params(cfg: &RuntimeCfg) -> AdvertisementParameters {
         interval_max: Duration::from_millis(max_ms),
         tx_power: adv_tx_power(cfg),
         channel_map: adv_channel_map(cfg),
+        filter_policy: adv_filter_policy(cfg),
         ..Default::default()
+    }
+}
+
+fn adv_filter_policy(cfg: &RuntimeCfg) -> AdvFilterPolicy {
+    match cfg.adv_filter_policy {
+        1 => AdvFilterPolicy::FilterScan,
+        2 => AdvFilterPolicy::FilterConn,
+        3 => AdvFilterPolicy::FilterConnAndScan,
+        _ => AdvFilterPolicy::Unfiltered,
     }
 }
 
@@ -2375,6 +2400,17 @@ fn adv_channel_map(cfg: &RuntimeCfg) -> Option<AdvChannelMap> {
                 .enable_channel_39((bits & 0x04) != 0),
         )
     }
+}
+
+fn adv_accept_peer(cfg: &RuntimeCfg) -> Option<Address> {
+    if cfg.adv_accept_address.is_null() {
+        return None;
+    }
+    let mut addr = [0u8; 6];
+    unsafe {
+        core::ptr::copy_nonoverlapping(cfg.adv_accept_address, addr.as_mut_ptr(), 6);
+    }
+    Some(peer_address(addr, cfg.adv_accept_address_kind))
 }
 
 fn directed_peer(cfg: &RuntimeCfg) -> Option<Address> {

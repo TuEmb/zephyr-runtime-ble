@@ -141,6 +141,27 @@ ZTEST(runtime_ble_edge, test_l2cap_config_validation)
 	zassert_equal(runtime_ble_init(test_base_cfg()), RUNTIME_BLE_OK, "restore base cfg failed");
 }
 
+ZTEST(runtime_ble_edge, test_adv_filter_policy_validation)
+{
+	static const uint8_t peer[6] = {0, 1, 2, 3, 4, 5};
+	runtime_ble_config_t cfg = *test_base_cfg();
+
+	cfg.adv_filter_policy = 4;
+	cfg.adv_accept_address = peer;
+	zassert_equal(runtime_ble_init(&cfg), RUNTIME_BLE_ERR_INVALID,
+		      "unknown advertising filter policy must be rejected");
+
+	cfg = *test_base_cfg();
+	cfg.adv_filter_policy = RUNTIME_BLE_ADV_FILTER_CONN;
+	zassert_equal(runtime_ble_init(&cfg), RUNTIME_BLE_ERR_INVALID,
+		      "filter policy must require an accept-list address");
+
+	cfg.adv_accept_address = peer;
+	zassert_equal(runtime_ble_init(&cfg), RUNTIME_BLE_OK,
+		      "filter policy with an accept-list address should initialize");
+	zassert_equal(runtime_ble_init(test_base_cfg()), RUNTIME_BLE_OK, "restore base cfg failed");
+}
+
 ZTEST(runtime_ble_edge, test_central_indicate_subscribe_requires_central_lib)
 {
 	zassert_equal(runtime_ble_client_subscribe_indicate(1), RUNTIME_BLE_ERR_INVALID,

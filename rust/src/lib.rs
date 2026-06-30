@@ -313,6 +313,9 @@ pub struct RuntimeBleConfig {
     pub adv_interval_max_ms: u16,
     /// Advertising channel map bits: bit0=37, bit1=38, bit2=39; 0 -> all.
     pub adv_channel_map: u8,
+    pub adv_filter_policy: u8,
+    pub adv_accept_address: *const u8,
+    pub adv_accept_address_kind: u8,
     /// 0 = general discoverable (default), 1 = limited, 2 = non-discoverable.
     pub discoverable: u8,
     /// Optional custom 6-byte static-random address; null -> hwinfo-derived.
@@ -373,6 +376,9 @@ pub(crate) struct RuntimeCfg {
     pub adv_interval_min_ms: u16,
     pub adv_interval_max_ms: u16,
     pub adv_channel_map: u8,
+    pub adv_filter_policy: u8,
+    pub adv_accept_address: *const u8,
+    pub adv_accept_address_kind: u8,
     pub discoverable: u8,
     pub address: *const u8,
     pub directed_peer_address: *const u8,
@@ -522,6 +528,8 @@ pub extern "C" fn runtime_ble_init(cfg: *const RuntimeBleConfig) -> c_int {
     if c.l2cap_credit_policy > 1
         || (c.l2cap_mtu != 0 && c.l2cap_mtu < 23)
         || (c.l2cap_mps != 0 && c.l2cap_mps < 23)
+        || c.adv_filter_policy > 3
+        || (c.adv_filter_policy != 0 && c.adv_accept_address.is_null())
     {
         return RUNTIME_BLE_ERR_INVALID;
     }
@@ -549,6 +557,9 @@ pub extern "C" fn runtime_ble_init(cfg: *const RuntimeBleConfig) -> c_int {
             adv_interval_min_ms: c.adv_interval_min_ms,
             adv_interval_max_ms: c.adv_interval_max_ms,
             adv_channel_map: c.adv_channel_map,
+            adv_filter_policy: c.adv_filter_policy,
+            adv_accept_address: c.adv_accept_address,
+            adv_accept_address_kind: c.adv_accept_address_kind,
             discoverable: c.discoverable,
             address: c.address,
             directed_peer_address: c.directed_peer_address,
