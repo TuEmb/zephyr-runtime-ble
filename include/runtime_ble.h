@@ -77,6 +77,9 @@ extern "C" {
 #define RUNTIME_BLE_ADV_EXT_DISABLED 0
 #define RUNTIME_BLE_ADV_EXT_ENABLED  1
 
+#define RUNTIME_BLE_PERIODIC_ADV_DISABLED 0
+#define RUNTIME_BLE_PERIODIC_ADV_ENABLED  1
+
 /* Frame spacing type bits for runtime_ble_update_frame_space(). */
 #define RUNTIME_BLE_FRAME_SPACE_ACL_CP (1u << 0)
 #define RUNTIME_BLE_FRAME_SPACE_ACL_PC (1u << 1)
@@ -377,6 +380,12 @@ typedef struct {
 	uint8_t                 adv_extended;         /* RUNTIME_BLE_ADV_EXT_*; 0 -> legacy */
 	uint8_t                 adv_primary_phy;      /* RUNTIME_BLE_PHY_*; 0 -> 1M */
 	uint8_t                 adv_secondary_phy;    /* RUNTIME_BLE_PHY_*; 0 -> primary PHY */
+	uint8_t                 periodic_adv;         /* RUNTIME_BLE_PERIODIC_ADV_* */
+	uint16_t                periodic_adv_interval_min_ms; /* 0 -> 100 ms */
+	uint16_t                periodic_adv_interval_max_ms; /* 0 -> 250 ms */
+	const uint8_t          *periodic_adv_data;    /* periodic AD structures, <=255 bytes */
+	uint8_t                 periodic_adv_data_len;
+	uint8_t                 periodic_adv_include_tx_power;
 	/* User-defined GATT. NULL/0 -> built-in NUS. Otherwise built at load time;
 	 * use on_write + runtime_ble_notify() with the flat characteristic index.
 	 * The service/characteristic/descriptor arrays and their uuid/value buffers

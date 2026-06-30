@@ -327,6 +327,12 @@ pub struct RuntimeBleConfig {
     pub adv_extended: u8,
     pub adv_primary_phy: u8,
     pub adv_secondary_phy: u8,
+    pub periodic_adv: u8,
+    pub periodic_adv_interval_min_ms: u16,
+    pub periodic_adv_interval_max_ms: u16,
+    pub periodic_adv_data: *const u8,
+    pub periodic_adv_data_len: u8,
+    pub periodic_adv_include_tx_power: u8,
     /// User-defined GATT (null/0 -> built-in NUS). Built at load time.
     pub services: *const RuntimeBleServiceDef,
     pub num_services: u8,
@@ -390,6 +396,12 @@ pub(crate) struct RuntimeCfg {
     pub adv_extended: u8,
     pub adv_primary_phy: u8,
     pub adv_secondary_phy: u8,
+    pub periodic_adv: u8,
+    pub periodic_adv_interval_min_ms: u16,
+    pub periodic_adv_interval_max_ms: u16,
+    pub periodic_adv_data: *const u8,
+    pub periodic_adv_data_len: u8,
+    pub periodic_adv_include_tx_power: u8,
     pub services: *const RuntimeBleServiceDef,
     pub num_services: u8,
     pub role: u8,
@@ -538,6 +550,8 @@ pub extern "C" fn runtime_ble_init(cfg: *const RuntimeBleConfig) -> c_int {
         || c.adv_extended > 1
         || c.adv_primary_phy > 3
         || c.adv_secondary_phy > 3
+        || c.periodic_adv > 1
+        || (c.periodic_adv != 0 && (c.adv_extended == 0 || c.nonconnectable == 0))
         || (c.adv_filter_policy != 0 && c.adv_accept_address.is_null())
     {
         return RUNTIME_BLE_ERR_INVALID;
@@ -577,6 +591,12 @@ pub extern "C" fn runtime_ble_init(cfg: *const RuntimeBleConfig) -> c_int {
             adv_extended: c.adv_extended,
             adv_primary_phy: c.adv_primary_phy,
             adv_secondary_phy: c.adv_secondary_phy,
+            periodic_adv: c.periodic_adv,
+            periodic_adv_interval_min_ms: c.periodic_adv_interval_min_ms,
+            periodic_adv_interval_max_ms: c.periodic_adv_interval_max_ms,
+            periodic_adv_data: c.periodic_adv_data,
+            periodic_adv_data_len: c.periodic_adv_data_len,
+            periodic_adv_include_tx_power: c.periodic_adv_include_tx_power,
             services: c.services,
             num_services: c.num_services,
             role: c.role,

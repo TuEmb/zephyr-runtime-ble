@@ -16,9 +16,13 @@ use core::pin::pin;
 use core::sync::atomic::Ordering;
 use core::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 
+use bt_hci::cmd::le::{LeSetPeriodicAdvData, LeSetPeriodicAdvEnable, LeSetPeriodicAdvParams};
 #[cfg(feature = "central")]
 use bt_hci::param::FilterDuplicates;
-use bt_hci::param::{AddrKind, BdAddr, LeAdvEventKind, LeExtAdvDataStatus, PhyMask, SpacingTypes};
+use bt_hci::param::{
+    AddrKind, AdvHandle, BdAddr, Duration as HciDuration, LeAdvEventKind, LeExtAdvDataStatus,
+    Operation, PeriodicAdvProps, PhyMask, SpacingTypes,
+};
 use bt_hci::uuid::BluetoothUuid16;
 use embassy_futures::join::join;
 #[cfg(feature = "central")]
@@ -2241,7 +2245,10 @@ async fn serve(
 ) {
     if cfg.nonconnectable != 0 {
         while !UNLOAD_REQ.load(Ordering::Acquire) {
-            if advertise_nonconnectable(peripheral, cfg).await.is_ok() {
+            if advertise_nonconnectable(peripheral, stack, cfg)
+                .await
+                .is_ok()
+            {
                 break;
             }
             Timer::after(Duration::from_secs(1)).await;
@@ -2250,7 +2257,7 @@ async fn serve(
     }
 
     loop {
-        match advertise_connectable(peripheral, cfg).await {
+        match advertise_connectable(peripheral, stack, cfg).await {
             Ok(conn) => {
                 if let Some(cb) = cfg.callbacks.on_connected {
                     cb(cfg.user);
@@ -2267,6 +2274,7 @@ async fn serve(
 
 async fn advertise_connectable<'a>(
     peripheral: &mut Peripheral<'a, nrf_sdc::SoftdeviceController<'static>, DefaultPacketPool>,
+    stack: &Stack<'_, nrf_sdc::SoftdeviceController<'static>, DefaultPacketPool>,
     cfg: &RuntimeCfg,
 ) -> Result<Connection<'a, DefaultPacketPool>, BleHostError<nrf_sdc::Error>> {
     apply_adv_accept_list(peripheral, cfg).await?;
@@ -2284,6 +2292,7 @@ async fn advertise_connectable<'a>(
             let sets = [set];
             let mut handles = AdvertisementSet::handles(&sets);
             let advertiser = peripheral.advertise_ext(&sets, &mut handles).await?;
+            enable_periodic_advertising(stack, cfg).await?;
             return Ok(advertiser.accept().await?);
         }
         let adv_params = advertising_params(cfg);
@@ -2308,6 +2317,7 @@ async fn advertise_connectable<'a>(
         let sets = [set];
         let mut handles = AdvertisementSet::handles(&sets);
         let advertiser = peripheral.advertise_ext(&sets, &mut handles).await?;
+        enable_periodic_advertising(stack, cfg).await?;
         return Ok(advertiser.accept().await?);
     }
 
@@ -2326,6 +2336,7 @@ async fn advertise_connectable<'a>(
 
 async fn advertise_nonconnectable(
     peripheral: &mut Peripheral<'_, nrf_sdc::SoftdeviceController<'static>, DefaultPacketPool>,
+    stack: &Stack<'_, nrf_sdc::SoftdeviceController<'static>, DefaultPacketPool>,
     cfg: &RuntimeCfg,
 ) -> Result<(), BleHostError<nrf_sdc::Error>> {
     apply_adv_accept_list(peripheral, cfg).await?;
@@ -2349,6 +2360,7 @@ async fn advertise_nonconnectable(
         let sets = [set];
         let mut handles = AdvertisementSet::handles(&sets);
         let _advertiser = peripheral.advertise_ext(&sets, &mut handles).await?;
+        enable_periodic_advertising(stack, cfg).await?;
         wait_unload().await;
         return Ok(());
     }
@@ -2389,6 +2401,50 @@ async fn apply_adv_accept_list(
     if let Some(peer) = adv_accept_peer(cfg) {
         peripheral.set_filter_accept_list(&[peer]).await?;
     }
+    Ok(())
+}
+
+async fn enable_periodic_advertising(
+    stack: &Stack<'_, nrf_sdc::SoftdeviceController<'static>, DefaultPacketPool>,
+    cfg: &RuntimeCfg,
+) -> Result<(), BleHostError<nrf_sdc::Error>> {
+    if cfg.periodic_adv == 0 {
+        return Ok(());
+    }
+    let min_ms = if cfg.periodic_adv_interval_min_ms == 0 {
+        100
+    } else {
+        cfg.periodic_adv_interval_min_ms
+    };
+    let max_ms = if cfg.periodic_adv_interval_max_ms == 0 {
+        250
+    } else {
+        cfg.periodic_adv_interval_max_ms.max(min_ms)
+    };
+    let handle = AdvHandle::new(0);
+    let props = PeriodicAdvProps::new().include_tx_power(cfg.periodic_adv_include_tx_power != 0);
+    stack
+        .command(LeSetPeriodicAdvParams::new(
+            handle,
+            HciDuration::<1_250>::from_millis(min_ms as u32),
+            HciDuration::<1_250>::from_millis(max_ms as u32),
+            props,
+        ))
+        .await?;
+
+    let data = if !cfg.periodic_adv_data.is_null() && cfg.periodic_adv_data_len > 0 {
+        unsafe {
+            core::slice::from_raw_parts(cfg.periodic_adv_data, cfg.periodic_adv_data_len as usize)
+        }
+    } else {
+        &[]
+    };
+    stack
+        .command(LeSetPeriodicAdvData::new(handle, Operation::Complete, data))
+        .await?;
+    stack
+        .command(LeSetPeriodicAdvEnable::new(true, handle))
+        .await?;
     Ok(())
 }
 
