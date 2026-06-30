@@ -65,4 +65,22 @@ config RUNTIME_BLE_L2CAP
 	  that opens channels. The matching staticlib must exist for the target
 	  chip — build it with the `l2cap` Cargo feature (see rust/README.md).
 
+config RUNTIME_BLE_LEAN
+	bool "Use the lean (slim controller) prebuilt staticlib"
+	default n
+	depends on !RUNTIME_BLE_CENTRAL && !RUNTIME_BLE_L2CAP
+	help
+	  Links the lean prebuilt staticlib (lib/<chip>/libruntime_ble_lean.a): a
+	  peripheral-only build with the heavy optional SoftDevice Controller features
+	  compiled out (extended + periodic advertising, Coded PHY, connection
+	  subrating, frame-space update) and a smaller controller memory pool. Use it
+	  for legacy-advertising peripherals / beacons that never need those features,
+	  to cut controller RAM (and a little flash).
+
+	  Peripheral-only: incompatible with CONFIG_RUNTIME_BLE_CENTRAL and
+	  CONFIG_RUNTIME_BLE_L2CAP. For finer, per-app control without switching libs,
+	  use the runtime config.sdc_disable bitmask instead. The matching staticlib
+	  must exist for the target chip — build it with the `lean` Cargo feature
+	  (see rust/README.md).
+
 endif # RUNTIME_BLE

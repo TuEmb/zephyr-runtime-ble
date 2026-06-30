@@ -27,10 +27,13 @@ use crate::RuntimeCfg;
 const L2CAP_TXQ: u8 = 4;
 const L2CAP_RXQ: u8 = 4;
 
-// SoftDevice Controller memory pool; the central role needs more.
-#[cfg(not(feature = "central"))]
+// SoftDevice Controller memory pool; the central role needs more. The lean
+// variant drops ext/periodic/coded/subrating/frame-space, so it fits a smaller pool.
+#[cfg(feature = "lean")]
+const SDC_MEM: usize = 12288;
+#[cfg(all(not(feature = "central"), not(feature = "lean")))]
 const SDC_MEM: usize = 16384;
-#[cfg(feature = "central")]
+#[cfg(all(feature = "central", not(feature = "lean")))]
 const SDC_MEM: usize = 20480;
 
 fn io_capability_from_c(capability: u8) -> IoCapabilities {
@@ -79,12 +82,27 @@ fn build_sdc<'d, const N: usize>(
     mpsl: &'d MultiprotocolServiceLayer,
     mem: &'d mut sdc::Mem<N>,
 ) -> Result<nrf_sdc::SoftdeviceController<'d>, nrf_sdc::Error> {
+    // The lean variant hard-disables the heavy optional features at compile time
+    // so its controller fits the smaller SDC_MEM pool (see above).
+    #[cfg(not(feature = "lean"))]
     let dis = cfg.sdc_disable;
+    #[cfg(feature = "lean")]
+    let dis = cfg.sdc_disable
+        | crate::SDC_DISABLE_CODED_PHY
+        | crate::SDC_DISABLE_SUBRATING
+        | crate::SDC_DISABLE_FRAME_SPACE;
+
     // A feature the app actually configures is kept regardless of the disable mask.
+    #[cfg(not(feature = "lean"))]
     let want_ext_adv = cfg.adv_extended != 0
         || cfg.periodic_adv != 0
         || (dis & crate::SDC_DISABLE_EXT_ADV) == 0;
+    #[cfg(not(feature = "lean"))]
     let want_periodic = cfg.periodic_adv != 0 || (dis & crate::SDC_DISABLE_PERIODIC_ADV) == 0;
+    #[cfg(feature = "lean")]
+    let want_ext_adv = false;
+    #[cfg(feature = "lean")]
+    let want_periodic = false;
 
     let mut b = sdc::Builder::new()?.support_adv().support_peripheral();
     if want_ext_adv {

@@ -74,7 +74,7 @@ via the module's `CMakeLists.txt`.
 
 ## Role variants (optional)
 
-The default lib is the lean **peripheral + GATT-server** build. Extra roles are
+The default lib is the **peripheral + GATT-server** build. Extra roles are
 compile-time Cargo features, baked into a separate lib whose filename encodes the
 roles — `CMakeLists.txt` selects it from the matching `CONFIG_RUNTIME_BLE_*`:
 
@@ -84,9 +84,14 @@ roles — `CMakeLists.txt` selects it from the matching `CONFIG_RUNTIME_BLE_*`:
 | `central` | `libruntime_ble_central.a` | `CONFIG_RUNTIME_BLE_CENTRAL=y` |
 | `l2cap` | `libruntime_ble_l2cap.a` | `CONFIG_RUNTIME_BLE_L2CAP=y` |
 | `central,l2cap` | `libruntime_ble_central_l2cap.a` | both of the above |
+| `lean` | `libruntime_ble_lean.a` | `CONFIG_RUNTIME_BLE_LEAN=y` |
 
-The filename suffix is `_central` then `_l2cap`, in that order (matching
-`CMakeLists.txt`).
+The `central`/`l2cap` filename suffix is `_central` then `_l2cap`, in that order
+(matching `CMakeLists.txt`). `lean` is a standalone **peripheral-only** slim build
+(extended/periodic advertising, Coded PHY, subrating and frame-space update
+compiled out + a smaller SDC memory pool); it is not combined with `central`/
+`l2cap`. For per-app control without switching libs, use the runtime
+`config.sdc_disable` bitmask instead (see `include/runtime_ble.h`).
 
 Add the feature to the build and stage under the matching name, e.g. on Linux:
 ```sh

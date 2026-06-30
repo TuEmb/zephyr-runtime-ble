@@ -41,6 +41,8 @@ default = []
 # (e.g. `--features nrf54l15,central` -> stage as libruntime_ble_central.a).
 central = []   # scan/connect + GATT client (RUNTIME_BLE_ROLE_CENTRAL)
 l2cap = []     # L2CAP connection-oriented channels (config.l2cap_psm)
+lean = []      # peripheral-only: drop ext/periodic/coded/subrating/frame-space +
+               # shrink the SDC memory pool (RUNTIME_BLE_LEAN). Not for central/l2cap.
 # Common radio dependencies, shared by every chip feature below.
 _radio = [
     "dep:embassy-executor",

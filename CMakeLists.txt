@@ -32,12 +32,18 @@ endif()
 
 # Select the staticlib variant for the enabled roles. The filename encodes the
 # extra (non-default) roles compiled into it; the default is peripheral + server.
+# The lean variant is a peripheral-only slim build (no central/l2cap), so it is a
+# standalone variant rather than a suffix combined with the others.
 set(RTBLE_VARIANT "")
-if(CONFIG_RUNTIME_BLE_CENTRAL)
-  string(APPEND RTBLE_VARIANT "_central")
-endif()
-if(CONFIG_RUNTIME_BLE_L2CAP)
-  string(APPEND RTBLE_VARIANT "_l2cap")
+if(CONFIG_RUNTIME_BLE_LEAN)
+  set(RTBLE_VARIANT "_lean")
+else()
+  if(CONFIG_RUNTIME_BLE_CENTRAL)
+    string(APPEND RTBLE_VARIANT "_central")
+  endif()
+  if(CONFIG_RUNTIME_BLE_L2CAP)
+    string(APPEND RTBLE_VARIANT "_l2cap")
+  endif()
 endif()
 
 set(RTBLE_LIB ${RTBLE_DIR}/lib/${RTBLE_CHIP}/libruntime_ble${RTBLE_VARIANT}.a)
