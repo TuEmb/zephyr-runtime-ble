@@ -486,7 +486,7 @@ pub(crate) fn log(cfg: &RuntimeCfg, msg: &core::ffi::CStr) {
     }
 }
 
-fn log_str(cfg: &RuntimeCfg, s: &str) {
+pub(crate) fn log_str(cfg: &RuntimeCfg, s: &str) {
     if let Some(cb) = cfg.callbacks.on_log {
         cb(s.as_ptr() as *const core::ffi::c_char, cfg.user);
     }

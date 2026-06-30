@@ -165,6 +165,37 @@ fails); bump the pool and retry. See the per-example `prj.conf` for working
 values, and `CONFIG_RUNTIME_BLE_THREAD_STACK_SIZE` / `_PRIORITY` in
 [`Kconfig`](Kconfig) to tune the BLE thread.
 
+## Optimizing RAM
+
+A loaded session is heap-allocated and **fully freed on `runtime_ble_unload()`**,
+so it costs ~no RAM until loaded. The loaded footprint has three big parts: the
+**dynamic thread stack**, the **SoftDevice Controller pool**, and the host/server
+state. Three knobs trade features for RAM (all measured on nRF54L15, custom-GATT
+peripheral, via `CONFIG_SYS_HEAP_RUNTIME_STATS` around load):
+
+| Configuration | Heap used on load |
+|---|---|
+| Peripheral, default lib, 32 KB stack | ~57.8 KB |
+| Peripheral, **`CONFIG_RUNTIME_BLE_LEAN=y`** | ~44.5 KB |
+| Peripheral, lean + `CONFIG_RUNTIME_BLE_THREAD_STACK_SIZE=24576` | ~36.5 KB |
+| Dual (server + client), default, 64 KB stack | ~95 KB |
+
+1. **`CONFIG_RUNTIME_BLE_THREAD_STACK_SIZE`** — the single largest part. Default
+   32768; the tested floor is ~24576. Each 1 KB off the stack is 1 KB off the heap.
+2. **`CONFIG_RUNTIME_BLE_LEAN=y`** — links the peripheral-only lean staticlib:
+   extended/periodic advertising, Coded PHY, subrating, frame-space update and the
+   LE extended feature set are compiled out, and the controller pool is right-sized
+   (~6 KB vs ~18 KB). Best for legacy-advertising peripherals / beacons. Not for
+   central/L2CAP builds.
+3. **`config.sdc_disable`** (runtime bitmask, `RUNTIME_BLE_SDC_DISABLE_*`) — trims
+   the controller's *active* feature set without switching libs. Useful for power/
+   interop, but note the pool is reserved at compile time, so it does not shrink the
+   heap the way the lean lib does.
+
+The library logs `"[runtime-ble] sdc mem: need <n> have <pool>"` at load (via your
+`on_log`), so you can see the controller's exact memory need and right-size a custom
+lib build (`SDC_MEM` in `rust/src/chip/`).
+
 ## Features
 
 All of these are configured from C through `runtime_ble_config_t` — **no Rust

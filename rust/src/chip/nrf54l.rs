@@ -17,7 +17,7 @@ use trouble_host::prelude::*;
 
 #[cfg(feature = "central")]
 use super::serve_central;
-use super::{device_address, log, serve_session, Resources, EXT_ADV_DATA_MAX};
+use super::{device_address, log, log_str, serve_session, Resources, EXT_ADV_DATA_MAX};
 use crate::RuntimeCfg;
 
 const L2CAP_TXQ: u8 = 4;
@@ -27,8 +27,10 @@ const L2CAP_RXQ: u8 = 4;
 // link state), so size it up when that feature is compiled in. The lean variant
 // drops ext/periodic/coded/subrating/frame-space (peripheral-only), so its
 // controller fits a smaller pool.
+// Right-sized to the lean feature set: measured `required_memory()` = 5688 B on
+// nRF54L15 (logged at load), rounded up with a small margin.
 #[cfg(feature = "lean")]
-const SDC_MEM: usize = 13312;
+const SDC_MEM: usize = 6144;
 #[cfg(all(not(feature = "central"), not(feature = "lean")))]
 const SDC_MEM: usize = 18432;
 #[cfg(all(feature = "central", not(feature = "lean")))]
@@ -126,7 +128,12 @@ fn build_sdc<'d, const N: usize>(
     if (dis & crate::SDC_DISABLE_FRAME_SPACE) == 0 {
         b = b.support_frame_space_update_peripheral();
     }
-    b = b.support_extended_feature_set();
+    // The lean variant drops the LE extended feature-set exchange too (a basic
+    // peripheral does not need it); keep it in the full builds.
+    #[cfg(not(feature = "lean"))]
+    {
+        b = b.support_extended_feature_set();
+    }
     if (dis & crate::SDC_DISABLE_SUBRATING) == 0 {
         b = b.support_connection_subrating_peripheral();
     }
@@ -157,13 +164,27 @@ fn build_sdc<'d, const N: usize>(
     {
         b = b.central_count(1)?;
     }
-    b.buffer_cfg(
+    let b = b.buffer_cfg(
         DefaultPacketPool::MTU as u16,
         DefaultPacketPool::MTU as u16,
         L2CAP_TXQ,
         L2CAP_RXQ,
-    )?
-    .build(p, rng, mpsl, mem)
+    )?;
+    // Report the exact controller memory this feature set needs vs the reserved
+    // SDC_MEM pool, so a lib builder can right-size SDC_MEM (see rust/README.md).
+    log_required_mem(cfg, b.required_memory(), N);
+    b.build(p, rng, mpsl, mem)
+}
+
+/// Log "[runtime-ble] sdc mem: need <req> have <pool>" via the app's on_log.
+fn log_required_mem(cfg: &RuntimeCfg, req: Result<usize, nrf_sdc::Error>, pool: usize) {
+    use core::fmt::Write;
+    let mut s: heapless::String<56> = heapless::String::new();
+    let _ = match req {
+        Ok(r) => write!(s, "[runtime-ble] sdc mem: need {r} have {pool}\0"),
+        Err(_) => write!(s, "[runtime-ble] sdc required_memory query failed\0"),
+    };
+    log_str(cfg, &s);
 }
 
 /// One load->unload session. Allocates MPSL/SDC/host resources on the heap,
