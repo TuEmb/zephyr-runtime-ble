@@ -324,6 +324,9 @@ pub struct RuntimeBleConfig {
     pub directed_peer_address: *const u8,
     pub directed_peer_address_kind: u8,
     pub directed_high_duty: u8,
+    pub adv_extended: u8,
+    pub adv_primary_phy: u8,
+    pub adv_secondary_phy: u8,
     /// User-defined GATT (null/0 -> built-in NUS). Built at load time.
     pub services: *const RuntimeBleServiceDef,
     pub num_services: u8,
@@ -384,6 +387,9 @@ pub(crate) struct RuntimeCfg {
     pub directed_peer_address: *const u8,
     pub directed_peer_address_kind: u8,
     pub directed_high_duty: u8,
+    pub adv_extended: u8,
+    pub adv_primary_phy: u8,
+    pub adv_secondary_phy: u8,
     pub services: *const RuntimeBleServiceDef,
     pub num_services: u8,
     pub role: u8,
@@ -529,6 +535,9 @@ pub extern "C" fn runtime_ble_init(cfg: *const RuntimeBleConfig) -> c_int {
         || (c.l2cap_mtu != 0 && c.l2cap_mtu < 23)
         || (c.l2cap_mps != 0 && c.l2cap_mps < 23)
         || c.adv_filter_policy > 3
+        || c.adv_extended > 1
+        || c.adv_primary_phy > 3
+        || c.adv_secondary_phy > 3
         || (c.adv_filter_policy != 0 && c.adv_accept_address.is_null())
     {
         return RUNTIME_BLE_ERR_INVALID;
@@ -565,6 +574,9 @@ pub extern "C" fn runtime_ble_init(cfg: *const RuntimeBleConfig) -> c_int {
             directed_peer_address: c.directed_peer_address,
             directed_peer_address_kind: c.directed_peer_address_kind,
             directed_high_duty: c.directed_high_duty,
+            adv_extended: c.adv_extended,
+            adv_primary_phy: c.adv_primary_phy,
+            adv_secondary_phy: c.adv_secondary_phy,
             services: c.services,
             num_services: c.num_services,
             role: c.role,

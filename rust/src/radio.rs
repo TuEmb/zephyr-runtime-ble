@@ -29,7 +29,7 @@ use embassy_time::{Duration, Timer};
 use embassy_time_driver::Driver;
 use embassy_time_queue_utils::Queue;
 use nrf_sdc::mpsl::MultiprotocolServiceLayer;
-use trouble_host::advertise::{AdvChannelMap, AdvFilterPolicy, TxPower};
+use trouble_host::advertise::{AdvChannelMap, AdvFilterPolicy, AdvertisementSet, PhyKind, TxPower};
 use trouble_host::attribute::{
     AttPermissions, AttributeTable, Characteristic, CharacteristicProps, PermissionLevel, Service,
 };
@@ -166,6 +166,7 @@ const ATT_MAX: usize = 64;
 const BOND_BLOB_LEN: usize = 53;
 const BOND_BLOB_VERSION: u8 = 2;
 const BOND_BLOB_VERSION_LEGACY: u8 = 1;
+pub(crate) const EXT_ADV_DATA_MAX: usize = 255;
 const BOND_SLOT_CAP: usize = 4;
 // The central-capable builds allow two simultaneous links so a device can be a
 // peripheral (server) and a central (client) at the same time (RUNTIME_BLE_ROLE_DUAL).
@@ -2270,6 +2271,21 @@ async fn advertise_connectable<'a>(
 ) -> Result<Connection<'a, DefaultPacketPool>, BleHostError<nrf_sdc::Error>> {
     apply_adv_accept_list(peripheral, cfg).await?;
     if let Some(peer) = directed_peer(cfg) {
+        if cfg.adv_extended != 0 && cfg.directed_high_duty == 0 {
+            let (adv, _, adv_params) = advertising_parts_ext(cfg)?;
+            let set = AdvertisementSet {
+                params: adv_params,
+                data: Advertisement::ExtConnectableNonscannableDirected {
+                    peer,
+                    adv_data: adv.as_slice(),
+                },
+                address: None,
+            };
+            let sets = [set];
+            let mut handles = AdvertisementSet::handles(&sets);
+            let advertiser = peripheral.advertise_ext(&sets, &mut handles).await?;
+            return Ok(advertiser.accept().await?);
+        }
         let adv_params = advertising_params(cfg);
         let advertisement = if cfg.directed_high_duty != 0 {
             Advertisement::ConnectableNonscannableDirectedHighDuty { peer }
@@ -2277,6 +2293,21 @@ async fn advertise_connectable<'a>(
             Advertisement::ConnectableNonscannableDirected { peer }
         };
         let advertiser = peripheral.advertise(&adv_params, advertisement).await?;
+        return Ok(advertiser.accept().await?);
+    }
+
+    if cfg.adv_extended != 0 {
+        let (adv, _, adv_params) = advertising_parts_ext(cfg)?;
+        let set = AdvertisementSet {
+            params: adv_params,
+            data: Advertisement::ExtConnectableNonscannableUndirected {
+                adv_data: adv.as_slice(),
+            },
+            address: None,
+        };
+        let sets = [set];
+        let mut handles = AdvertisementSet::handles(&sets);
+        let advertiser = peripheral.advertise_ext(&sets, &mut handles).await?;
         return Ok(advertiser.accept().await?);
     }
 
@@ -2298,6 +2329,30 @@ async fn advertise_nonconnectable(
     cfg: &RuntimeCfg,
 ) -> Result<(), BleHostError<nrf_sdc::Error>> {
     apply_adv_accept_list(peripheral, cfg).await?;
+    if cfg.adv_extended != 0 {
+        let (adv, scan_data, adv_params) = advertising_parts_ext(cfg)?;
+        let data = if adv.is_empty() && !scan_data.is_empty() {
+            Advertisement::ExtNonconnectableScannableUndirected {
+                scan_data: scan_data.as_slice(),
+            }
+        } else {
+            Advertisement::ExtNonconnectableNonscannableUndirected {
+                anonymous: false,
+                adv_data: adv.as_slice(),
+            }
+        };
+        let set = AdvertisementSet {
+            params: adv_params,
+            data,
+            address: None,
+        };
+        let sets = [set];
+        let mut handles = AdvertisementSet::handles(&sets);
+        let _advertiser = peripheral.advertise_ext(&sets, &mut handles).await?;
+        wait_unload().await;
+        return Ok(());
+    }
+
     let (adv, adv_len, scan_data, adv_params) = advertising_parts(cfg)?;
     if scan_data.is_empty() {
         let _advertiser = peripheral
@@ -2365,6 +2420,34 @@ fn advertising_parts<'a>(
     Ok((adv, adv_len, scan_data, adv_params))
 }
 
+type ExtAdvData = heapless::Vec<u8, EXT_ADV_DATA_MAX>;
+
+fn advertising_parts_ext(
+    cfg: &RuntimeCfg,
+) -> Result<(ExtAdvData, ExtAdvData, AdvertisementParameters), BleHostError<nrf_sdc::Error>> {
+    let name = unsafe { cstr_or(cfg.device_name, "RUNTIME-BLE") };
+    let flags = discoverability_flags(cfg);
+    let man: &[u8] = if !cfg.manufacturer_data.is_null() && cfg.manufacturer_data_len > 0 {
+        unsafe {
+            core::slice::from_raw_parts(cfg.manufacturer_data, cfg.manufacturer_data_len as usize)
+        }
+    } else {
+        &[]
+    };
+    let adv = advertising_payload_ext(cfg, flags, man, name)
+        .ok_or(BleHostError::BleHost(trouble_host::Error::InvalidValue))?;
+    let mut scan_data = ExtAdvData::new();
+    if !cfg.scan_response_data.is_null() && cfg.scan_response_data_len > 0 {
+        let data = unsafe {
+            core::slice::from_raw_parts(cfg.scan_response_data, cfg.scan_response_data_len as usize)
+        };
+        scan_data
+            .extend_from_slice(data)
+            .map_err(|_| BleHostError::BleHost(trouble_host::Error::InvalidValue))?;
+    }
+    Ok((adv, scan_data, advertising_params(cfg)))
+}
+
 fn discoverability_flags(cfg: &RuntimeCfg) -> u8 {
     match cfg.discoverable {
         1 => LE_LIMITED_DISCOVERABLE | BR_EDR_NOT_SUPPORTED,
@@ -2387,10 +2470,24 @@ fn advertising_params(cfg: &RuntimeCfg) -> AdvertisementParameters {
     AdvertisementParameters {
         interval_min: Duration::from_millis(min_ms),
         interval_max: Duration::from_millis(max_ms),
+        primary_phy: adv_phy_from_c(cfg.adv_primary_phy),
+        secondary_phy: adv_phy_from_c(if cfg.adv_secondary_phy == 0 {
+            cfg.adv_primary_phy
+        } else {
+            cfg.adv_secondary_phy
+        }),
         tx_power: adv_tx_power(cfg),
         channel_map: adv_channel_map(cfg),
         filter_policy: adv_filter_policy(cfg),
         ..Default::default()
+    }
+}
+
+fn adv_phy_from_c(phy: u8) -> PhyKind {
+    match phy {
+        2 => PhyKind::Le2M,
+        3 => PhyKind::LeCoded,
+        _ => PhyKind::Le1M,
     }
 }
 
@@ -2460,6 +2557,22 @@ fn advertising_payload(
     Some((adv, adv_len))
 }
 
+fn advertising_payload_ext(
+    cfg: &RuntimeCfg,
+    flags: u8,
+    manufacturer_data: &[u8],
+    name: &str,
+) -> Option<ExtAdvData> {
+    let mut adv = ExtAdvData::new();
+    if !cfg.adv_data.is_null() && cfg.adv_data_len > 0 {
+        let data = unsafe { core::slice::from_raw_parts(cfg.adv_data, cfg.adv_data_len as usize) };
+        adv.extend_from_slice(data).ok()?;
+        return Some(adv);
+    }
+    build_adv_payload_ext(cfg, flags, manufacturer_data, name, &mut adv)?;
+    Some(adv)
+}
+
 fn adv_tx_power(cfg: &RuntimeCfg) -> TxPower {
     if cfg.adv_tx_power_present == 0 {
         return TxPower::ZerodBm;
@@ -2498,6 +2611,16 @@ fn push_ad(dst: &mut [u8; 31], pos: &mut usize, ty: u8, data: &[u8]) -> bool {
     dst[*pos + 2..*pos + need].copy_from_slice(data);
     *pos += need;
     true
+}
+
+fn push_ad_ext(dst: &mut ExtAdvData, ty: u8, data: &[u8]) -> bool {
+    let need = data.len() + 2;
+    if data.len() > 254 || dst.len() + need > EXT_ADV_DATA_MAX {
+        return false;
+    }
+    dst.push((data.len() + 1) as u8).is_ok()
+        && dst.push(ty).is_ok()
+        && dst.extend_from_slice(data).is_ok()
 }
 
 fn build_adv_payload(
@@ -2596,6 +2719,80 @@ fn build_adv_payload(
         }
     }
     Some(pos)
+}
+
+fn build_adv_payload_ext(
+    cfg: &RuntimeCfg,
+    flags: u8,
+    manufacturer_data: &[u8],
+    name: &str,
+    dst: &mut ExtAdvData,
+) -> Option<()> {
+    if !push_ad_ext(dst, 0x01, &[flags]) {
+        return None;
+    }
+    if cfg.manufacturer_id != 0 || !manufacturer_data.is_empty() {
+        let mut man = ExtAdvData::new();
+        man.extend_from_slice(&cfg.manufacturer_id.to_le_bytes())
+            .ok()?;
+        man.extend_from_slice(manufacturer_data).ok()?;
+        if !push_ad_ext(dst, 0xff, man.as_slice()) {
+            return None;
+        }
+    }
+    if !cfg.adv_service_uuid.is_null()
+        && (cfg.adv_service_uuid_len == 2 || cfg.adv_service_uuid_len == 16)
+    {
+        let uuid = unsafe {
+            core::slice::from_raw_parts(cfg.adv_service_uuid, cfg.adv_service_uuid_len as usize)
+        };
+        let ty = if cfg.adv_service_uuid_len == 2 {
+            0x03
+        } else {
+            0x07
+        };
+        if !push_ad_ext(dst, ty, uuid) {
+            return None;
+        }
+    }
+    if !cfg.adv_service_data_uuid.is_null()
+        && !cfg.adv_service_data.is_null()
+        && cfg.adv_service_data_len > 0
+        && (cfg.adv_service_data_uuid_len == 2 || cfg.adv_service_data_uuid_len == 16)
+    {
+        let uuid_len = cfg.adv_service_data_uuid_len as usize;
+        let data_len = cfg.adv_service_data_len as usize;
+        let uuid = unsafe { core::slice::from_raw_parts(cfg.adv_service_data_uuid, uuid_len) };
+        let data = unsafe { core::slice::from_raw_parts(cfg.adv_service_data, data_len) };
+        let mut service_data = ExtAdvData::new();
+        service_data.extend_from_slice(uuid).ok()?;
+        service_data.extend_from_slice(data).ok()?;
+        let ty = if cfg.adv_service_data_uuid_len == 2 {
+            0x16
+        } else {
+            0x21
+        };
+        if !push_ad_ext(dst, ty, service_data.as_slice()) {
+            return None;
+        }
+    }
+    if cfg.adv_appearance != 0 {
+        let appearance = if cfg.appearance == 0 {
+            u16::from(appearance::power_device::GENERIC_POWER_DEVICE)
+        } else {
+            cfg.appearance
+        };
+        if !push_ad_ext(dst, 0x19, &appearance.to_le_bytes()) {
+            return None;
+        }
+    }
+    if cfg.adv_tx_power_present != 0 && !push_ad_ext(dst, 0x0a, &[cfg.adv_tx_power_dbm as u8]) {
+        return None;
+    }
+    if !name.is_empty() && !push_ad_ext(dst, 0x09, name.as_bytes()) {
+        return None;
+    }
+    Some(())
 }
 
 async fn connection_task(

@@ -74,6 +74,9 @@ extern "C" {
 #define RUNTIME_BLE_ADV_FILTER_CONN          2
 #define RUNTIME_BLE_ADV_FILTER_SCAN_AND_CONN 3
 
+#define RUNTIME_BLE_ADV_EXT_DISABLED 0
+#define RUNTIME_BLE_ADV_EXT_ENABLED  1
+
 /* Frame spacing type bits for runtime_ble_update_frame_space(). */
 #define RUNTIME_BLE_FRAME_SPACE_ACL_CP (1u << 0)
 #define RUNTIME_BLE_FRAME_SPACE_ACL_PC (1u << 1)
@@ -371,6 +374,9 @@ typedef struct {
 	const uint8_t          *directed_peer_address;/* optional 6-byte peer for directed adv */
 	uint8_t                 directed_peer_address_kind; /* RUNTIME_BLE_ADDR_* */
 	uint8_t                 directed_high_duty;   /* 1 -> high-duty directed advertising */
+	uint8_t                 adv_extended;         /* RUNTIME_BLE_ADV_EXT_*; 0 -> legacy */
+	uint8_t                 adv_primary_phy;      /* RUNTIME_BLE_PHY_*; 0 -> 1M */
+	uint8_t                 adv_secondary_phy;    /* RUNTIME_BLE_PHY_*; 0 -> primary PHY */
 	/* User-defined GATT. NULL/0 -> built-in NUS. Otherwise built at load time;
 	 * use on_write + runtime_ble_notify() with the flat characteristic index.
 	 * The service/characteristic/descriptor arrays and their uuid/value buffers

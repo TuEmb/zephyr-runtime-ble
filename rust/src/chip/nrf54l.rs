@@ -15,9 +15,9 @@ use nrf_sdc::mpsl::MultiprotocolServiceLayer;
 use nrf_sdc::{self as sdc, mpsl};
 use trouble_host::prelude::*;
 
-use super::{device_address, log, serve_session, Resources};
 #[cfg(feature = "central")]
 use super::serve_central;
+use super::{device_address, log, serve_session, Resources, EXT_ADV_DATA_MAX};
 use crate::RuntimeCfg;
 
 const L2CAP_TXQ: u8 = 4;
@@ -26,9 +26,9 @@ const L2CAP_RXQ: u8 = 4;
 // SoftDevice Controller memory pool. The central role needs more (scan + central
 // link state), so size it up when that feature is compiled in.
 #[cfg(not(feature = "central"))]
-const SDC_MEM: usize = 14336;
+const SDC_MEM: usize = 18432;
 #[cfg(feature = "central")]
-const SDC_MEM: usize = 20480;
+const SDC_MEM: usize = 24576;
 
 fn io_capability_from_c(capability: u8) -> IoCapabilities {
     match capability {
@@ -81,9 +81,11 @@ fn build_sdc<'d, const N: usize>(
 ) -> Result<nrf_sdc::SoftdeviceController<'d>, nrf_sdc::Error> {
     let b = sdc::Builder::new()?
         .support_adv()
+        .support_ext_adv()
         .support_peripheral()
         .support_le_2m_phy()
         .support_le_coded_phy()
+        .support_le_periodic_adv()
         .support_phy_update_peripheral()
         .support_dle_peripheral()
         .support_frame_space_update_peripheral()
@@ -99,7 +101,11 @@ fn build_sdc<'d, const N: usize>(
         .support_dle_central()
         .support_frame_space_update_central()
         .support_connection_subrating_central();
-    let b = b.peripheral_count(1)?;
+    let b = b
+        .peripheral_count(1)?
+        .adv_count(1)?
+        .adv_buffer_cfg(EXT_ADV_DATA_MAX as u16)?
+        .periodic_adv_count(1)?;
     #[cfg(feature = "central")]
     let b = b.central_count(1)?;
     b.buffer_cfg(
@@ -122,8 +128,18 @@ pub(crate) fn run(cfg: Option<&'static RuntimeCfg>, _mode: c_int) {
     let p = unsafe { embassy_nrf::Peripherals::steal() };
 
     let mpsl_p = mpsl::Peripherals::new(
-        p.GRTC_CH7, p.GRTC_CH8, p.GRTC_CH9, p.GRTC_CH10, p.GRTC_CH11, p.TIMER10, p.TIMER20, p.TEMP,
-        p.PPI10_CH0, p.PPI20_CH1, p.PPIB11_CH0, p.PPIB21_CH0,
+        p.GRTC_CH7,
+        p.GRTC_CH8,
+        p.GRTC_CH9,
+        p.GRTC_CH10,
+        p.GRTC_CH11,
+        p.TIMER10,
+        p.TIMER20,
+        p.TEMP,
+        p.PPI10_CH0,
+        p.PPI20_CH1,
+        p.PPIB11_CH0,
+        p.PPIB21_CH0,
     );
     let lfclk_cfg = mpsl::raw::mpsl_clock_lfclk_cfg_t {
         source: mpsl::raw::MPSL_CLOCK_LF_SRC_XTAL as u8,
@@ -142,13 +158,31 @@ pub(crate) fn run(cfg: Option<&'static RuntimeCfg>, _mode: c_int) {
     let mpsl: &'static MultiprotocolServiceLayer = unsafe { &*mpsl_ptr };
 
     let sdc_p = sdc::Peripherals::new(
-        p.PPI00_CH1, p.PPI00_CH3, p.PPI10_CH1, p.PPI10_CH2, p.PPI10_CH3, p.PPI10_CH4, p.PPI10_CH5,
-        p.PPI10_CH6, p.PPI10_CH7, p.PPI10_CH8, p.PPI10_CH9, p.PPI10_CH10, p.PPI10_CH11, p.PPIB00_CH1,
-        p.PPIB00_CH2, p.PPIB00_CH3, p.PPIB10_CH1, p.PPIB10_CH2, p.PPIB10_CH3,
+        p.PPI00_CH1,
+        p.PPI00_CH3,
+        p.PPI10_CH1,
+        p.PPI10_CH2,
+        p.PPI10_CH3,
+        p.PPI10_CH4,
+        p.PPI10_CH5,
+        p.PPI10_CH6,
+        p.PPI10_CH7,
+        p.PPI10_CH8,
+        p.PPI10_CH9,
+        p.PPI10_CH10,
+        p.PPI10_CH11,
+        p.PPIB00_CH1,
+        p.PPIB00_CH2,
+        p.PPIB00_CH3,
+        p.PPIB10_CH1,
+        p.PPIB10_CH2,
+        p.PPIB10_CH3,
     );
     let rng_ptr = Box::into_raw(Box::new(cracen::Cracen::new_blocking(p.CRACEN)));
     let mem_ptr = Box::into_raw(Box::new(sdc::Mem::<SDC_MEM>::new()));
-    let sdc = match build_sdc(sdc_p, unsafe { &mut *rng_ptr }, mpsl, unsafe { &mut *mem_ptr }) {
+    let sdc = match build_sdc(sdc_p, unsafe { &mut *rng_ptr }, mpsl, unsafe {
+        &mut *mem_ptr
+    }) {
         Ok(s) => s,
         Err(_) => {
             log(cfg, c"[runtime-ble] SDC init failed; aborting load");
