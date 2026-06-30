@@ -108,6 +108,14 @@ extern "C" {
 
 #define RUNTIME_BLE_SECURITY_FLAG_BONDED (1u << 0)
 
+/* Security IO capabilities. DEFAULT keeps the runtime default: no input/output. */
+#define RUNTIME_BLE_IO_CAP_DEFAULT            0
+#define RUNTIME_BLE_IO_CAP_DISPLAY_ONLY       1
+#define RUNTIME_BLE_IO_CAP_DISPLAY_YES_NO     2
+#define RUNTIME_BLE_IO_CAP_KEYBOARD_ONLY      3
+#define RUNTIME_BLE_IO_CAP_NO_INPUT_OUTPUT    4
+#define RUNTIME_BLE_IO_CAP_KEYBOARD_DISPLAY   5
+
 /* GATT client operation status, emitted through on_client_status. */
 #define RUNTIME_BLE_CLIENT_STATUS_OK     0
 #define RUNTIME_BLE_CLIENT_STATUS_FAILED (-1)
@@ -250,9 +258,18 @@ typedef struct {
 	/* Persistent bonding. `on_bond_load` is called at runtime load for slot
 	 * indices [0, bond_slot_count); return the blob length copied to out, or 0
 	 * for an empty slot. `on_bond_store` is called when a new/updated bond is
-	 * produced; persist blob bytes under the given slot index. */
+	 * produced; persist blob bytes under the given slot index. For bond deletion
+	 * len is 0 and blob may be NULL; clear that slot. */
 	size_t (*on_bond_load)(uint8_t index, uint8_t *out, size_t max_len, void *user);
 	void (*on_bond_store)(uint8_t index, const uint8_t *blob, size_t len, void *user);
+	/* runtime_ble_bond_enumerate() emits one callback per restored/runtime bond.
+	 * addr is 6 bytes, LSB first; addr_kind is RUNTIME_BLE_ADDR_*; flags uses
+	 * RUNTIME_BLE_SECURITY_FLAG_*. */
+	void (*on_bond)(uint8_t index, const uint8_t *addr, uint8_t addr_kind,
+			uint8_t level, uint8_t key_len, uint8_t flags, void *user);
+	/* Completion for runtime_ble_bond_delete[_all](). status is
+	 * RUNTIME_BLE_OK or RUNTIME_BLE_CLIENT_STATUS_FAILED. */
+	void (*on_bond_deleted)(uint8_t index, int8_t status, void *user);
 	/* Optional OOB pairing provider. Called when SECURITY_OOB_REQUEST fires.
 	 * Fill 16-byte local_random/local_confirm and peer_random/peer_confirm; return
 	 * non-zero to provide the data to the Security Manager. For legacy OOB, put
@@ -373,6 +390,7 @@ typedef struct {
 	uint8_t                 security_bondable;
 	uint8_t                 security_request_on_connect;
 	uint8_t                 security_oob_available;
+	uint8_t                 security_io_capability; /* RUNTIME_BLE_IO_CAP_*; 0 -> no input/output */
 	uint8_t                 bond_slot_count;      /* 0 -> RUNTIME_BLE_BOND_SLOTS_DEFAULT */
 
 	runtime_ble_callbacks_t callbacks;
@@ -448,6 +466,18 @@ int runtime_ble_passkey_confirm(uint8_t accept);
 
 /* Respond to a PASSKEY_INPUT event. passkey is the 6-digit decimal value. */
 int runtime_ble_passkey_input(uint32_t passkey);
+
+/* Set Security Manager IO capability while loaded. cap is RUNTIME_BLE_IO_CAP_*. */
+int runtime_ble_set_io_capability(uint8_t cap);
+
+/* Enumerate restored/runtime bonds through on_bond. */
+int runtime_ble_bond_enumerate(void);
+
+/* Delete a bond slot and clear app persistence through on_bond_store(index,NULL,0). */
+int runtime_ble_bond_delete(uint8_t index);
+
+/* Delete every configured bond slot. */
+int runtime_ble_bond_delete_all(void);
 
 /* The per-device BLE address as 6 bytes, out[0]=LSB. Stable across re-flashes
  * (derived from hwinfo); usable e.g. to build a per-device advertising name. */

@@ -46,8 +46,9 @@ use trouble_host::scan::Scanner;
 use trouble_host::{BondInformation, Identity, IdentityResolvingKey, LongTermKey, OobData};
 
 use crate::{
-    RuntimeBleCharDef, RuntimeCfg, NUS_TX_CHR, SEND_BUF, SEND_BUF_CAP, SEND_CHR, SEND_KIND,
-    SEND_KIND_INDICATE, SEND_LEN, SEND_REQ, UNLOAD_REQ,
+    RuntimeBleCharDef, RuntimeCfg, BCMD_DELETE, BCMD_DELETE_ALL, BCMD_ENUMERATE,
+    BCMD_SET_IO_CAPABILITY, BOND_CMD, BOND_INDEX, BOND_IO_CAPABILITY, NUS_TX_CHR, SEND_BUF,
+    SEND_BUF_CAP, SEND_CHR, SEND_KIND, SEND_KIND_INDICATE, SEND_LEN, SEND_REQ, UNLOAD_REQ,
 };
 #[cfg(feature = "central")]
 use crate::{
@@ -613,14 +614,24 @@ pub(crate) fn serve_session(
             select3(
                 work,
                 central_loop(stack, cfg, &gatt.bond_slots),
-                wait_unload(),
+                select(bond_admin_loop(stack, cfg, &gatt.bond_slots), wait_unload()),
             )
             .await;
         } else {
-            select(work, wait_unload()).await;
+            select3(
+                work,
+                bond_admin_loop(stack, cfg, &gatt.bond_slots),
+                wait_unload(),
+            )
+            .await;
         }
         #[cfg(not(feature = "central"))]
-        select(work, wait_unload()).await;
+        select3(
+            work,
+            bond_admin_loop(stack, cfg, &gatt.bond_slots),
+            wait_unload(),
+        )
+        .await;
     };
     block_on(select(mpsl.run(), ble_main));
 
@@ -809,6 +820,16 @@ fn c_to_security_level(level: u8) -> Option<trouble_host::prelude::SecurityLevel
     }
 }
 
+fn io_capability_from_c(capability: u8) -> IoCapabilities {
+    match capability {
+        1 => IoCapabilities::DisplayOnly,
+        2 => IoCapabilities::DisplayYesNo,
+        3 => IoCapabilities::KeyboardOnly,
+        5 => IoCapabilities::KeyboardDisplay,
+        _ => IoCapabilities::NoInputNoOutput,
+    }
+}
+
 fn bond_slot_count(cfg: &RuntimeCfg) -> u8 {
     let n = if cfg.bond_slot_count == 0 {
         BOND_SLOT_CAP as u8
@@ -911,6 +932,113 @@ fn store_bond(
     let mut blob = [0u8; BOND_BLOB_LEN];
     let len = serialize_bond(bond, &mut blob);
     store(slot, blob.as_ptr(), len, cfg.user);
+}
+
+fn bond_slot_for(
+    slots: &RefCell<heapless::Vec<(Identity, u8), BOND_SLOT_CAP>>,
+    identity: Identity,
+) -> u8 {
+    slots
+        .borrow()
+        .iter()
+        .find(|(id, _)| *id == identity)
+        .map(|(_, slot)| *slot)
+        .unwrap_or(0xff)
+}
+
+fn emit_bonds(
+    stack: &Stack<'_, nrf_sdc::SoftdeviceController<'static>, DefaultPacketPool>,
+    cfg: &RuntimeCfg,
+    slots: &RefCell<heapless::Vec<(Identity, u8), BOND_SLOT_CAP>>,
+) {
+    let Some(cb) = cfg.callbacks.on_bond else {
+        return;
+    };
+    stack.with_bond_information(|bonds| {
+        for bond in bonds {
+            let slot = bond_slot_for(slots, bond.identity);
+            let flags = if bond.is_bonded { 1 } else { 0 };
+            cb(
+                slot,
+                bond.identity.addr.addr.raw().as_ptr(),
+                bond.identity.addr.kind.as_raw(),
+                security_level_to_c(bond.security_level),
+                0,
+                flags,
+                cfg.user,
+            );
+        }
+    });
+}
+
+fn complete_bond_delete(cfg: &RuntimeCfg, index: u8, ok: bool) {
+    if let Some(cb) = cfg.callbacks.on_bond_deleted {
+        cb(index, if ok { 0 } else { -1 }, cfg.user);
+    }
+}
+
+fn clear_bond_slot(cfg: &RuntimeCfg, index: u8) {
+    if let Some(store) = cfg.callbacks.on_bond_store {
+        store(index, core::ptr::null(), 0, cfg.user);
+    }
+}
+
+fn delete_bond_slot(
+    stack: &Stack<'_, nrf_sdc::SoftdeviceController<'static>, DefaultPacketPool>,
+    cfg: &RuntimeCfg,
+    slots: &RefCell<heapless::Vec<(Identity, u8), BOND_SLOT_CAP>>,
+    index: u8,
+) -> bool {
+    let identity = {
+        let map = slots.borrow();
+        map.iter()
+            .find(|(_, slot)| *slot == index)
+            .map(|(identity, _)| *identity)
+    };
+    let Some(identity) = identity else {
+        clear_bond_slot(cfg, index);
+        complete_bond_delete(cfg, index, false);
+        return false;
+    };
+    let ok = stack.remove_bond_information(identity).is_ok();
+    if ok {
+        slots.borrow_mut().retain(|(_, slot)| *slot != index);
+        clear_bond_slot(cfg, index);
+    }
+    complete_bond_delete(cfg, index, ok);
+    ok
+}
+
+async fn bond_admin_loop(
+    stack: &Stack<'_, nrf_sdc::SoftdeviceController<'static>, DefaultPacketPool>,
+    cfg: &RuntimeCfg,
+    slots: &RefCell<heapless::Vec<(Identity, u8), BOND_SLOT_CAP>>,
+) {
+    loop {
+        if UNLOAD_REQ.load(Ordering::Acquire) {
+            return;
+        }
+        match BOND_CMD.swap(0, Ordering::AcqRel) {
+            BCMD_ENUMERATE => emit_bonds(stack, cfg, slots),
+            BCMD_DELETE => {
+                let index = BOND_INDEX.load(Ordering::Acquire).min(u8::MAX as usize) as u8;
+                delete_bond_slot(stack, cfg, slots, index);
+            }
+            BCMD_DELETE_ALL => {
+                for index in 0..bond_slot_count(cfg) {
+                    let _ = delete_bond_slot(stack, cfg, slots, index);
+                }
+            }
+            BCMD_SET_IO_CAPABILITY => {
+                let cap = BOND_IO_CAPABILITY
+                    .load(Ordering::Acquire)
+                    .min(u8::MAX as usize) as u8;
+                stack.set_io_capabilities(io_capability_from_c(cap));
+            }
+            _ => {}
+        }
+        Timer::after(Duration::from_millis(20)).await;
+    }
 }
 
 fn emit_local_oob_data(
@@ -1294,9 +1422,10 @@ pub(crate) fn serve_central(
     let runner = stack.runner();
     block_on(select(
         mpsl.run(),
-        select(
+        select3(
             run_runner(runner, cfg),
             central_loop(stack, cfg, &bond_slots),
+            bond_admin_loop(stack, cfg, &bond_slots),
         ),
     ));
 }

@@ -30,6 +30,16 @@ const SDC_MEM: usize = 14336;
 #[cfg(feature = "central")]
 const SDC_MEM: usize = 20480;
 
+fn io_capability_from_c(capability: u8) -> IoCapabilities {
+    match capability {
+        1 => IoCapabilities::DisplayOnly,
+        2 => IoCapabilities::DisplayYesNo,
+        3 => IoCapabilities::KeyboardOnly,
+        5 => IoCapabilities::KeyboardDisplay,
+        _ => IoCapabilities::NoInputNoOutput,
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Interrupts: `Irqs` is a type-level promise; the real ISRs are the C-callable
 // shims below, connected from Zephyr via IRQ_CONNECT in glue.c.
@@ -154,7 +164,7 @@ pub(crate) fn run(cfg: Option<&'static RuntimeCfg>, _mode: c_int) {
     let res_ptr: *mut Resources = Box::into_raw(Box::new(HostResources::new()));
     let builder = trouble_host::new(sdc, unsafe { &mut *res_ptr })
         .set_random_address(device_address(cfg))
-        .set_io_capabilities(IoCapabilities::NoInputNoOutput);
+        .set_io_capabilities(io_capability_from_c(cfg.security_io_capability));
     #[cfg(feature = "l2cap")]
     let builder = if cfg.l2cap_psm != 0 {
         builder.register_l2cap_spsm(cfg.l2cap_psm)

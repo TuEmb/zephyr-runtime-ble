@@ -116,6 +116,8 @@ ZTEST(runtime_ble_edge, test_security_argument_validation)
 {
 	zassert_equal(runtime_ble_passkey_input(1000000), RUNTIME_BLE_ERR_INVALID,
 		      "passkey must be a 6-digit value");
+	zassert_equal(runtime_ble_set_io_capability(6), RUNTIME_BLE_ERR_INVALID,
+		      "unknown IO capability must be rejected");
 }
 
 ZTEST(runtime_ble_edge, test_central_indicate_subscribe_requires_central_lib)

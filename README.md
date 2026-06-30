@@ -202,6 +202,13 @@ For persistent bonding, set `security_bondable = 1` and implement
 `on_bond_load(index, out, max, user)` / `on_bond_store(index, blob, len, user)`.
 Store the opaque `RUNTIME_BLE_BOND_BLOB_MAX` bytes in flash/settings as-is; the
 runtime restores them into the BLE stack on the next `runtime_ble_load()`.
+Use `security_io_capability` or `runtime_ble_set_io_capability()` with
+`RUNTIME_BLE_IO_CAP_*` when pairing should use display, keyboard, or numeric
+comparison instead of the default no-input/no-output capability. Use
+`runtime_ble_bond_enumerate()` to receive restored/runtime bonds via `on_bond`,
+and `runtime_ble_bond_delete()` / `runtime_ble_bond_delete_all()` to remove
+bonds; deletion calls `on_bond_store(index, NULL, 0, user)` so app storage can
+clear the matching slot.
 
 For OOB pairing, set `security_oob_available = 1`. When the Security Manager
 loads it calls `on_oob_local_data(local_random, local_confirm, user)` with the

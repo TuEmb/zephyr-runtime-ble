@@ -165,6 +165,20 @@ pub struct RuntimeBleCallbacks {
     /// Security: store a persistent bond blob to an application slot.
     pub on_bond_store:
         Option<extern "C" fn(index: u8, blob: *const u8, len: usize, user: *mut c_void)>,
+    /// Security: one restored/runtime bond returned by runtime_ble_bond_enumerate().
+    pub on_bond: Option<
+        extern "C" fn(
+            index: u8,
+            addr: *const u8,
+            addr_kind: u8,
+            level: u8,
+            key_len: u8,
+            flags: u8,
+            user: *mut c_void,
+        ),
+    >,
+    /// Security: completion for runtime_ble_bond_delete[_all]().
+    pub on_bond_deleted: Option<extern "C" fn(index: u8, status: i8, user: *mut c_void)>,
     /// Security: provide local/peer OOB data when requested during pairing.
     pub on_oob_request: Option<
         extern "C" fn(
@@ -323,6 +337,7 @@ pub struct RuntimeBleConfig {
     pub security_bondable: u8,
     pub security_request_on_connect: u8,
     pub security_oob_available: u8,
+    pub security_io_capability: u8,
     pub bond_slot_count: u8,
     pub callbacks: RuntimeBleCallbacks,
     pub user: *mut c_void,
@@ -371,6 +386,7 @@ pub(crate) struct RuntimeCfg {
     pub security_bondable: u8,
     pub security_request_on_connect: u8,
     pub security_oob_available: u8,
+    pub security_io_capability: u8,
     pub bond_slot_count: u8,
     pub callbacks: RuntimeBleCallbacks,
     pub user: *mut c_void,
@@ -472,6 +488,16 @@ pub(crate) static LINK_RATE_SUBRATE_MAX: AtomicUsize = AtomicUsize::new(0);
 pub(crate) static LINK_RATE_CONTINUATION: AtomicUsize = AtomicUsize::new(0);
 pub(crate) static LINK_PASSKEY: AtomicU32 = AtomicU32::new(0);
 
+// ---- Security bond/admin command channel ----
+pub(crate) const BCMD_NONE: u32 = 0;
+pub(crate) const BCMD_ENUMERATE: u32 = 1;
+pub(crate) const BCMD_DELETE: u32 = 2;
+pub(crate) const BCMD_DELETE_ALL: u32 = 3;
+pub(crate) const BCMD_SET_IO_CAPABILITY: u32 = 4;
+pub(crate) static BOND_CMD: AtomicU32 = AtomicU32::new(BCMD_NONE);
+pub(crate) static BOND_INDEX: AtomicUsize = AtomicUsize::new(0);
+pub(crate) static BOND_IO_CAPABILITY: AtomicUsize = AtomicUsize::new(0);
+
 const RUNTIME_BLE_OK: c_int = 0;
 const RUNTIME_BLE_ERR_INVALID: c_int = -1;
 const RUNTIME_BLE_ERR_NO_MEM: c_int = -2;
@@ -525,6 +551,7 @@ pub extern "C" fn runtime_ble_init(cfg: *const RuntimeBleConfig) -> c_int {
             security_bondable: c.security_bondable,
             security_request_on_connect: c.security_request_on_connect,
             security_oob_available: c.security_oob_available,
+            security_io_capability: c.security_io_capability,
             bond_slot_count: c.bond_slot_count,
             callbacks: c.callbacks,
             user: c.user,
@@ -690,6 +717,46 @@ pub extern "C" fn runtime_ble_passkey_input(passkey: u32) -> c_int {
     }
     LINK_PASSKEY.store(passkey, Ordering::Release);
     link_cmd(LCMD_PASSKEY_INPUT)
+}
+
+fn valid_io_capability(capability: u8) -> bool {
+    capability <= 5
+}
+
+fn bond_admin_cmd(cmd: u32, value: usize) -> c_int {
+    if BOND_CMD.load(Ordering::Acquire) != BCMD_NONE {
+        return RUNTIME_BLE_ERR_NO_MEM;
+    }
+    match cmd {
+        BCMD_DELETE => BOND_INDEX.store(value, Ordering::Release),
+        BCMD_SET_IO_CAPABILITY => BOND_IO_CAPABILITY.store(value, Ordering::Release),
+        _ => {}
+    }
+    BOND_CMD.store(cmd, Ordering::Release);
+    RUNTIME_BLE_OK
+}
+
+#[no_mangle]
+pub extern "C" fn runtime_ble_set_io_capability(capability: u8) -> c_int {
+    if !valid_io_capability(capability) {
+        return RUNTIME_BLE_ERR_INVALID;
+    }
+    bond_admin_cmd(BCMD_SET_IO_CAPABILITY, capability as usize)
+}
+
+#[no_mangle]
+pub extern "C" fn runtime_ble_bond_enumerate() -> c_int {
+    bond_admin_cmd(BCMD_ENUMERATE, 0)
+}
+
+#[no_mangle]
+pub extern "C" fn runtime_ble_bond_delete(index: u8) -> c_int {
+    bond_admin_cmd(BCMD_DELETE, index as usize)
+}
+
+#[no_mangle]
+pub extern "C" fn runtime_ble_bond_delete_all() -> c_int {
+    bond_admin_cmd(BCMD_DELETE_ALL, 0)
 }
 
 // ---- Central / GATT client API ----

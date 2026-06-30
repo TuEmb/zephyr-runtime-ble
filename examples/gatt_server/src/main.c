@@ -181,12 +181,32 @@ static size_t on_bond_load(uint8_t index, uint8_t *out, size_t max_len, void *us
 static void on_bond_store(uint8_t index, const uint8_t *blob, size_t len, void *user)
 {
 	ARG_UNUSED(user);
+	if (index == 0 && len == 0) {
+		bond_blob_len = 0;
+		printk("[app] cleared bond blob\n");
+		return;
+	}
 	if (index != 0 || len > sizeof(bond_blob)) {
 		return;
 	}
 	memcpy(bond_blob, blob, len);
 	bond_blob_len = len;
 	printk("[app] stored bond blob len=%u\n", (unsigned int)len);
+}
+
+static void on_bond(uint8_t index, const uint8_t *addr, uint8_t addr_kind, uint8_t level,
+		    uint8_t key_len, uint8_t flags, void *user)
+{
+	ARG_UNUSED(user);
+	printk("[app] bond index=%u kind=%u addr=%02x:%02x:%02x:%02x:%02x:%02x level=%u key_len=%u flags=0x%02x\n",
+	       index, addr_kind, addr[5], addr[4], addr[3], addr[2], addr[1], addr[0],
+	       level, key_len, flags);
+}
+
+static void on_bond_deleted(uint8_t index, int8_t status, void *user)
+{
+	ARG_UNUSED(user);
+	printk("[app] bond delete index=%u status=%d\n", index, status);
 }
 
 int main(void)
@@ -204,6 +224,7 @@ int main(void)
 		.services = my_services,
 		.num_services = 1,
 		.security_bondable = 1,
+		.security_io_capability = RUNTIME_BLE_IO_CAP_DISPLAY_YES_NO,
 		.bond_slot_count = 1,
 		.callbacks = {
 			.on_connected = on_connected,
@@ -219,6 +240,8 @@ int main(void)
 			.on_security_state = on_security_state,
 			.on_bond_load = on_bond_load,
 			.on_bond_store = on_bond_store,
+			.on_bond = on_bond,
+			.on_bond_deleted = on_bond_deleted,
 			.on_log = on_log,
 		},
 		.user = NULL,
