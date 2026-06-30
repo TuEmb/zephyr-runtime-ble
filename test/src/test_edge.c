@@ -122,6 +122,8 @@ ZTEST(runtime_ble_edge, test_central_indicate_subscribe_requires_central_lib)
 {
 	zassert_equal(runtime_ble_client_subscribe_indicate(1), RUNTIME_BLE_ERR_INVALID,
 		      "default peripheral lib must reject central indication subscribe");
+	zassert_equal(runtime_ble_client_unsubscribe(1), RUNTIME_BLE_ERR_INVALID,
+		      "default peripheral lib must reject central unsubscribe");
 }
 
 ZTEST(runtime_ble_edge, test_central_read_blob_requires_central_lib)

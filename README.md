@@ -234,6 +234,7 @@ runtime_ble_client_discover_descriptors(start, end);
 runtime_ble_client_subscribe(handle);   // -> on_notification(handle, …)
 runtime_ble_client_subscribe_indicate(handle);
                                         // subscribe with CCCD indications
+runtime_ble_client_unsubscribe(handle); // disable CCCD notifications/indications
 runtime_ble_client_write(handle, buf, n);
 runtime_ble_client_write_no_rsp(handle, buf, n);
 runtime_ble_client_read(handle);        // -> on_read(handle, …)
@@ -264,6 +265,8 @@ characteristics for follow-up descriptor discovery and CCCD subscription.
 Use `runtime_ble_client_subscribe_indicate()` for peers that expose indications
 instead of notifications; both deliver incoming values via `on_notification`.
 Incoming client indications are confirmed automatically after the callback runs.
+Use `runtime_ble_client_unsubscribe()` to write CCCD=0x0000 for a discovered
+characteristic and stop notifications or indications from that peer.
 Use `runtime_ble_client_read_blob()` to continue reading long attributes from a
 specific ATT offset; returned bytes still arrive through `on_read`.
 Use `runtime_ble_client_read_by_uuid()` to issue ATT Read By Type over a handle

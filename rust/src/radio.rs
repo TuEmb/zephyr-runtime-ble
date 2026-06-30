@@ -53,9 +53,9 @@ use crate::{
 use crate::{
     CCMD_CONNECT, CCMD_DISCONNECT, CCMD_DISCOVER, CCMD_DISCOVER_ALL, CCMD_DISCOVER_DESCRIPTORS,
     CCMD_DISCOVER_SERVICES, CCMD_NONE, CCMD_READ, CCMD_READ_BLOB, CCMD_READ_BY_UUID,
-    CCMD_SCAN_START, CCMD_SCAN_STOP, CCMD_SUBSCRIBE, CCMD_SUBSCRIBE_INDICATE, CCMD_WRITE,
-    CCMD_WRITE_NO_RSP, CENTRAL_ADDR, CENTRAL_ADDR_KIND, CENTRAL_CMD, CENTRAL_HANDLE, CENTRAL_UUID,
-    CENTRAL_UUID_LEN, SCAN_ACTIVE, SCAN_FILTER_ADDR, SCAN_FILTER_ADDR_ENABLED,
+    CCMD_SCAN_START, CCMD_SCAN_STOP, CCMD_SUBSCRIBE, CCMD_SUBSCRIBE_INDICATE, CCMD_UNSUBSCRIBE,
+    CCMD_WRITE, CCMD_WRITE_NO_RSP, CENTRAL_ADDR, CENTRAL_ADDR_KIND, CENTRAL_CMD, CENTRAL_HANDLE,
+    CENTRAL_UUID, CENTRAL_UUID_LEN, SCAN_ACTIVE, SCAN_FILTER_ADDR, SCAN_FILTER_ADDR_ENABLED,
     SCAN_FILTER_ADDR_KIND, SCAN_FILTER_DUPLICATES, SCAN_INTERVAL_MS, SCAN_PHY_OPTIONS,
     SCAN_TIMEOUT_MS, SCAN_WINDOW_MS,
 };
@@ -1584,7 +1584,7 @@ async fn client_session(
                         h,
                     );
                 }
-                cmd @ (CCMD_SUBSCRIBE | CCMD_SUBSCRIBE_INDICATE) => {
+                cmd @ (CCMD_SUBSCRIBE | CCMD_SUBSCRIBE_INDICATE | CCMD_UNSUBSCRIBE) => {
                     let h = CENTRAL_HANDLE.load(Ordering::Acquire) as u16;
                     let cccd = store
                         .borrow()
@@ -1592,18 +1592,18 @@ async fn client_session(
                         .find(|(handle, _)| *handle == h)
                         .and_then(|(_, cccd)| *cccd)
                         .unwrap_or(h + 1);
-                    let value = if cmd == CCMD_SUBSCRIBE_INDICATE {
-                        [0x02, 0x00]
-                    } else {
-                        [0x01, 0x00]
+                    let value = match cmd {
+                        CCMD_SUBSCRIBE_INDICATE => [0x02, 0x00],
+                        CCMD_UNSUBSCRIBE => [0x00, 0x00],
+                        _ => [0x01, 0x00],
                     };
                     let result = client.write_handle(cccd, &value).await;
                     emit_client_status(
                         cfg,
-                        if cmd == CCMD_SUBSCRIBE_INDICATE {
-                            CLIENT_OP_SUBSCRIBE_INDICATE
-                        } else {
-                            CLIENT_OP_SUBSCRIBE
+                        match cmd {
+                            CCMD_SUBSCRIBE_INDICATE => CLIENT_OP_SUBSCRIBE_INDICATE,
+                            CCMD_UNSUBSCRIBE => CLIENT_OP_UNSUBSCRIBE,
+                            _ => CLIENT_OP_SUBSCRIBE,
                         },
                         if result.is_ok() {
                             CLIENT_STATUS_OK
@@ -1666,6 +1666,8 @@ const CLIENT_OP_SUBSCRIBE: u8 = 9;
 const CLIENT_OP_SUBSCRIBE_INDICATE: u8 = 10;
 #[cfg(feature = "central")]
 const CLIENT_OP_READ_BY_UUID: u8 = 11;
+#[cfg(feature = "central")]
+const CLIENT_OP_UNSUBSCRIBE: u8 = 12;
 
 #[cfg(feature = "central")]
 fn emit_client_status(cfg: &RuntimeCfg, op: u8, status: i8, handle: u16) {

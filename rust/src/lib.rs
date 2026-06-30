@@ -412,6 +412,7 @@ pub(crate) const CCMD_READ_BLOB: u32 = 12;
 pub(crate) const CCMD_DISCOVER_ALL: u32 = 13;
 pub(crate) const CCMD_DISCOVER_SERVICES: u32 = 14;
 pub(crate) const CCMD_READ_BY_UUID: u32 = 15;
+pub(crate) const CCMD_UNSUBSCRIBE: u32 = 16;
 pub(crate) static CENTRAL_CMD: AtomicU32 = AtomicU32::new(CCMD_NONE);
 /// Attribute handle (read/write/subscribe) for the pending command.
 pub(crate) static CENTRAL_HANDLE: AtomicU32 = AtomicU32::new(0);
@@ -970,6 +971,11 @@ pub extern "C" fn runtime_ble_client_subscribe(handle: u16) -> c_int {
 #[no_mangle]
 pub extern "C" fn runtime_ble_client_subscribe_indicate(handle: u16) -> c_int {
     central_cmd(CCMD_SUBSCRIBE_INDICATE, handle as u32)
+}
+
+#[no_mangle]
+pub extern "C" fn runtime_ble_client_unsubscribe(handle: u16) -> c_int {
+    central_cmd(CCMD_UNSUBSCRIBE, handle as u32)
 }
 
 // ---- L2CAP API ----

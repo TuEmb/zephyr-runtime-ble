@@ -123,6 +123,7 @@ extern "C" {
 #define RUNTIME_BLE_CLIENT_OP_SUBSCRIBE            9
 #define RUNTIME_BLE_CLIENT_OP_SUBSCRIBE_INDICATE   10
 #define RUNTIME_BLE_CLIENT_OP_READ_BY_UUID         11
+#define RUNTIME_BLE_CLIENT_OP_UNSUBSCRIBE          12
 
 /* Opaque bond blob format used by on_bond_load/on_bond_store. Store the bytes as
  * given; the first byte is a runtime-managed format version. */
@@ -532,6 +533,9 @@ int runtime_ble_client_subscribe(uint16_t handle);
 /* Subscribe to a characteristic by enabling indications (CCCD=0x0002);
  * incoming indicated values arrive via on_notification. */
 int runtime_ble_client_subscribe_indicate(uint16_t handle);
+
+/* Unsubscribe from a characteristic by disabling its CCCD (CCCD=0x0000). */
+int runtime_ble_client_unsubscribe(uint16_t handle);
 
 /* ---- L2CAP API ----
  * Available with a l2cap-capable lib (CONFIG_RUNTIME_BLE_L2CAP=y) and
