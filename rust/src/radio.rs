@@ -178,7 +178,12 @@ const BOND_SLOT_CAP: usize = 4;
 const CONNECTIONS_MAX: usize = 2;
 #[cfg(not(feature = "central"))]
 const CONNECTIONS_MAX: usize = 1;
+// Only the l2cap-capable builds reserve L2CAP channel storage in HostResources;
+// peripheral/central-only builds don't open CoC, so they reserve none.
+#[cfg(feature = "l2cap")]
 const L2CAP_CHANNELS_MAX: usize = 2;
+#[cfg(not(feature = "l2cap"))]
+const L2CAP_CHANNELS_MAX: usize = 0;
 
 pub(crate) type Resources = HostResources<
     nrf_sdc::SoftdeviceController<'static>,
