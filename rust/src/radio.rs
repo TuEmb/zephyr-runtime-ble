@@ -39,7 +39,7 @@ use trouble_host::connection::{ConnectRateParams, RequestedConnParams};
 #[cfg(feature = "central")]
 use trouble_host::gatt::GattClient;
 #[cfg(feature = "l2cap")]
-use trouble_host::l2cap::{L2capChannel, L2capChannelConfig};
+use trouble_host::l2cap::{CreditFlowPolicy, L2capChannel, L2capChannelConfig};
 use trouble_host::prelude::*;
 #[cfg(feature = "central")]
 use trouble_host::scan::Scanner;
@@ -1319,14 +1319,34 @@ async fn l2cap_peripheral(
     cfg: &RuntimeCfg,
 ) {
     let listener = L2capChannel::listen(stack, conn);
+    let chan_cfg = l2cap_channel_config(cfg);
     loop {
-        match listener.accept(&L2capChannelConfig::default()).await {
+        match listener.accept(&chan_cfg).await {
             Ok(ch) => l2cap_serve(stack, ch, cfg).await,
             Err(_) => Timer::after(Duration::from_millis(200)).await,
         }
         if UNLOAD_REQ.load(Ordering::Acquire) {
             break;
         }
+    }
+}
+
+#[cfg(feature = "l2cap")]
+fn l2cap_channel_config(cfg: &RuntimeCfg) -> L2capChannelConfig {
+    let policy_value = if cfg.l2cap_credit_policy_value == 0 {
+        1
+    } else {
+        cfg.l2cap_credit_policy_value
+    };
+    let flow_policy = match cfg.l2cap_credit_policy {
+        1 => CreditFlowPolicy::MinThreshold(policy_value),
+        _ => CreditFlowPolicy::Every(policy_value),
+    };
+    L2capChannelConfig {
+        mtu: (cfg.l2cap_mtu != 0).then_some(cfg.l2cap_mtu),
+        mps: (cfg.l2cap_mps != 0).then_some(cfg.l2cap_mps),
+        flow_policy,
+        initial_credits: (cfg.l2cap_initial_credits != 0).then_some(cfg.l2cap_initial_credits),
     }
 }
 
@@ -2184,7 +2204,7 @@ async fn l2cap_central(
     cfg: &RuntimeCfg,
 ) {
     Timer::after(Duration::from_millis(400)).await; // let the link/MTU settle
-    match L2capChannel::create(stack, conn, cfg.l2cap_psm, &L2capChannelConfig::default()).await {
+    match L2capChannel::create(stack, conn, cfg.l2cap_psm, &l2cap_channel_config(cfg)).await {
         Ok(ch) => l2cap_serve(stack, ch, cfg).await,
         Err(_) => log_str(cfg, "[l2cap] create failed\0"),
     }

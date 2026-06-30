@@ -296,6 +296,9 @@ a client. See [`examples/dual/`](examples/dual/) (HW-verified: advertises
 `config.l2cap_psm`. Once `on_l2cap_connected` fires, send SDUs with
 `runtime_ble_l2cap_send()` and close the channel with
 `runtime_ble_l2cap_disconnect()`; received SDUs arrive through `on_l2cap_data`.
+Optional CoC tuning is available through `config.l2cap_mtu`, `l2cap_mps`,
+`l2cap_initial_credits`, `l2cap_credit_policy`, and `l2cap_credit_policy_value`
+(zero keeps the runtime defaults).
 
 ## Adding a chip
 1. Add a `<chip> = ["_radio", "embassy-nrf/<chip>", "nrf-sdc/<chip>"]` feature

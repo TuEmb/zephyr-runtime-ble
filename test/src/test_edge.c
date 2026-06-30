@@ -120,6 +120,27 @@ ZTEST(runtime_ble_edge, test_security_argument_validation)
 		      "unknown IO capability must be rejected");
 }
 
+ZTEST(runtime_ble_edge, test_l2cap_config_validation)
+{
+	runtime_ble_config_t cfg = *test_base_cfg();
+
+	cfg.l2cap_credit_policy = 2;
+	zassert_equal(runtime_ble_init(&cfg), RUNTIME_BLE_ERR_INVALID,
+		      "unknown L2CAP credit policy must be rejected");
+
+	cfg = *test_base_cfg();
+	cfg.l2cap_mtu = 22;
+	zassert_equal(runtime_ble_init(&cfg), RUNTIME_BLE_ERR_INVALID,
+		      "too-small L2CAP MTU must be rejected");
+
+	cfg = *test_base_cfg();
+	cfg.l2cap_mps = 22;
+	zassert_equal(runtime_ble_init(&cfg), RUNTIME_BLE_ERR_INVALID,
+		      "too-small L2CAP MPS must be rejected");
+
+	zassert_equal(runtime_ble_init(test_base_cfg()), RUNTIME_BLE_OK, "restore base cfg failed");
+}
+
 ZTEST(runtime_ble_edge, test_central_indicate_subscribe_requires_central_lib)
 {
 	zassert_equal(runtime_ble_client_subscribe_indicate(1), RUNTIME_BLE_ERR_INVALID,

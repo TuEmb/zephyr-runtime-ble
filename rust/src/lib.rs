@@ -334,6 +334,11 @@ pub struct RuntimeBleConfig {
     pub central_conn_latency: u16,
     pub central_conn_timeout_ms: u16,
     pub l2cap_psm: u16,
+    pub l2cap_mtu: u16,
+    pub l2cap_mps: u16,
+    pub l2cap_initial_credits: u16,
+    pub l2cap_credit_policy: u8,
+    pub l2cap_credit_policy_value: u16,
     pub security_bondable: u8,
     pub security_request_on_connect: u8,
     pub security_oob_available: u8,
@@ -383,6 +388,11 @@ pub(crate) struct RuntimeCfg {
     pub central_conn_latency: u16,
     pub central_conn_timeout_ms: u16,
     pub l2cap_psm: u16,
+    pub l2cap_mtu: u16,
+    pub l2cap_mps: u16,
+    pub l2cap_initial_credits: u16,
+    pub l2cap_credit_policy: u8,
+    pub l2cap_credit_policy_value: u16,
     pub security_bondable: u8,
     pub security_request_on_connect: u8,
     pub security_oob_available: u8,
@@ -509,6 +519,12 @@ pub extern "C" fn runtime_ble_init(cfg: *const RuntimeBleConfig) -> c_int {
         return RUNTIME_BLE_ERR_INVALID;
     }
     let c = unsafe { &*cfg };
+    if c.l2cap_credit_policy > 1
+        || (c.l2cap_mtu != 0 && c.l2cap_mtu < 23)
+        || (c.l2cap_mps != 0 && c.l2cap_mps < 23)
+    {
+        return RUNTIME_BLE_ERR_INVALID;
+    }
     unsafe {
         CONFIG = Some(RuntimeCfg {
             device_name: c.device_name,
@@ -548,6 +564,11 @@ pub extern "C" fn runtime_ble_init(cfg: *const RuntimeBleConfig) -> c_int {
             central_conn_latency: c.central_conn_latency,
             central_conn_timeout_ms: c.central_conn_timeout_ms,
             l2cap_psm: c.l2cap_psm,
+            l2cap_mtu: c.l2cap_mtu,
+            l2cap_mps: c.l2cap_mps,
+            l2cap_initial_credits: c.l2cap_initial_credits,
+            l2cap_credit_policy: c.l2cap_credit_policy,
+            l2cap_credit_policy_value: c.l2cap_credit_policy_value,
             security_bondable: c.security_bondable,
             security_request_on_connect: c.security_request_on_connect,
             security_oob_available: c.security_oob_available,

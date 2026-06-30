@@ -75,6 +75,11 @@ int main(void)
 		.peer_address = peer,
 		.peer_address_kind = RUNTIME_BLE_ADDR_RANDOM,
 		.l2cap_psm = L2CAP_PSM,
+		.l2cap_mtu = 128,
+		.l2cap_mps = 64,
+		.l2cap_initial_credits = 4,
+		.l2cap_credit_policy = RUNTIME_BLE_L2CAP_CREDITS_EVERY,
+		.l2cap_credit_policy_value = 2,
 		.callbacks = {
 			.on_connected = on_connected,
 			.on_disconnected = on_disconnected,

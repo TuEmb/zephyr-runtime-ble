@@ -116,6 +116,9 @@ extern "C" {
 #define RUNTIME_BLE_IO_CAP_NO_INPUT_OUTPUT    4
 #define RUNTIME_BLE_IO_CAP_KEYBOARD_DISPLAY   5
 
+#define RUNTIME_BLE_L2CAP_CREDITS_EVERY         0
+#define RUNTIME_BLE_L2CAP_CREDITS_MIN_THRESHOLD 1
+
 /* GATT client operation status, emitted through on_client_status. */
 #define RUNTIME_BLE_CLIENT_STATUS_OK     0
 #define RUNTIME_BLE_CLIENT_STATUS_FAILED (-1)
@@ -384,6 +387,15 @@ typedef struct {
 	 * peripheral listens on it and a central opens it. Needs a l2cap-capable
 	 * lib (CONFIG_RUNTIME_BLE_L2CAP=y). */
 	uint16_t                l2cap_psm;
+	/* Optional L2CAP CoC tuning. Zero keeps the runtime defaults. MTU is the
+	 * SDU size, MPS is the per-credit frame size, initial_credits is the peer's
+	 * starting send budget. credit_policy_value is N for CREDITS_EVERY and the
+	 * low-credit threshold for CREDITS_MIN_THRESHOLD; zero maps to 1. */
+	uint16_t                l2cap_mtu;
+	uint16_t                l2cap_mps;
+	uint16_t                l2cap_initial_credits;
+	uint8_t                 l2cap_credit_policy; /* RUNTIME_BLE_L2CAP_CREDITS_* */
+	uint16_t                l2cap_credit_policy_value;
 	/* Security Manager. `security_bondable` lets pairing produce bond data
 	 * inside the runtime; `security_request_on_connect` requests pairing or
 	 * encryption immediately after a link connects. */
