@@ -143,7 +143,7 @@ extern "C" {
 
 /* Opaque bond blob format used by on_bond_load/on_bond_store. Store the bytes as
  * given; the first byte is a runtime-managed format version. */
-#define RUNTIME_BLE_BOND_BLOB_MAX 43
+#define RUNTIME_BLE_BOND_BLOB_MAX 53
 #define RUNTIME_BLE_BOND_SLOTS_DEFAULT 4
 
 /* ---- Optional user-defined GATT ----

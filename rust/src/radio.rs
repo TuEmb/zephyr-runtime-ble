@@ -163,8 +163,9 @@ pub extern "C" fn runtime_alarm_fired() {
 // ---------------------------------------------------------------------------
 pub(crate) const VALUE_LEN: usize = 244;
 const ATT_MAX: usize = 64;
-const BOND_BLOB_LEN: usize = 43;
-const BOND_BLOB_VERSION: u8 = 1;
+const BOND_BLOB_LEN: usize = 53;
+const BOND_BLOB_VERSION: u8 = 2;
+const BOND_BLOB_VERSION_LEGACY: u8 = 1;
 const BOND_SLOT_CAP: usize = 4;
 // The central-capable builds allow two simultaneous links so a device can be a
 // peripheral (server) and a central (client) at the same time (RUNTIME_BLE_ROLE_DUAL).
@@ -248,6 +249,7 @@ fn descriptor_permissions(mask: u16) -> AttPermissions {
             map_permission(mask, C_PERM_WRITE_ENCRYPT, C_PERM_WRITE_AUTH)
                 .unwrap_or(PermissionLevel::NotAllowed)
         },
+        min_key_len: 0,
     }
 }
 
@@ -850,11 +852,17 @@ fn serialize_bond(bond: &BondInformation, out: &mut [u8; BOND_BLOB_LEN]) -> usiz
     if let Some(irk) = bond.identity.irk {
         out[26..42].copy_from_slice(&irk.to_le_bytes());
     }
+    out[42..44].copy_from_slice(&bond.ediv.to_le_bytes());
+    out[44..52].copy_from_slice(&bond.rand);
+    out[52] = bond.encryption_key_len;
     BOND_BLOB_LEN
 }
 
 fn deserialize_bond(blob: &[u8]) -> Option<BondInformation> {
-    if blob.len() < 42 || blob[0] != BOND_BLOB_VERSION {
+    if blob.len() < 42 || (blob[0] != BOND_BLOB_VERSION && blob[0] != BOND_BLOB_VERSION_LEGACY) {
+        return None;
+    }
+    if blob[0] == BOND_BLOB_VERSION && blob.len() < BOND_BLOB_LEN {
         return None;
     }
     let security_level = c_to_security_level(blob[2])?;
@@ -869,7 +877,7 @@ fn deserialize_bond(blob: &[u8]) -> Option<BondInformation> {
     } else {
         None
     };
-    Some(BondInformation::new(
+    let mut bond = BondInformation::new(
         Identity {
             addr: Address::new(AddrKind::new(blob[3]), BdAddr::new(addr)),
             irk,
@@ -877,7 +885,13 @@ fn deserialize_bond(blob: &[u8]) -> Option<BondInformation> {
         LongTermKey::from_le_bytes(ltk),
         security_level,
         blob[1] & 0x01 != 0,
-    ))
+    );
+    if blob[0] == BOND_BLOB_VERSION {
+        bond.ediv = u16::from_le_bytes([blob[42], blob[43]]);
+        bond.rand.copy_from_slice(&blob[44..52]);
+        bond.encryption_key_len = blob[52];
+    }
+    Some(bond)
 }
 
 fn restore_bonds(
@@ -963,7 +977,7 @@ fn emit_bonds(
                 bond.identity.addr.addr.raw().as_ptr(),
                 bond.identity.addr.kind.as_raw(),
                 security_level_to_c(bond.security_level),
-                0,
+                bond.encryption_key_len,
                 flags,
                 cfg.user,
             );
@@ -1076,8 +1090,9 @@ fn emit_security_event(
 fn emit_security_state(conn: &Connection<'_, DefaultPacketPool>, cfg: &RuntimeCfg) {
     if let Some(cb) = cfg.callbacks.on_security_state {
         let level = conn.security_level().map(security_level_to_c).unwrap_or(0);
+        let key_len = conn.encryption_key_len().unwrap_or(0);
         let flags = if conn.is_bonded_peer() { 1 } else { 0 };
-        cb(level, 0, flags, cfg.user);
+        cb(level, key_len, flags, cfg.user);
     }
 }
 
