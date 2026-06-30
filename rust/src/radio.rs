@@ -2251,6 +2251,7 @@ async fn serve(
             {
                 break;
             }
+            log_str(cfg, "[adv] start failed\0");
             Timer::after(Duration::from_secs(1)).await;
         }
         return;
@@ -2342,14 +2343,18 @@ async fn advertise_nonconnectable(
     apply_adv_accept_list(peripheral, cfg).await?;
     if cfg.adv_extended != 0 {
         let (adv, scan_data, adv_params) = advertising_parts_ext(cfg)?;
-        let data = if adv.is_empty() && !scan_data.is_empty() {
-            Advertisement::ExtNonconnectableScannableUndirected {
-                scan_data: scan_data.as_slice(),
-            }
-        } else {
+        let mut scan_payload = adv;
+        scan_payload
+            .extend_from_slice(scan_data.as_slice())
+            .map_err(|_| BleHostError::BleHost(trouble_host::Error::InvalidValue))?;
+        let data = if cfg.periodic_adv != 0 {
             Advertisement::ExtNonconnectableNonscannableUndirected {
                 anonymous: false,
-                adv_data: adv.as_slice(),
+                adv_data: scan_payload.as_slice(),
+            }
+        } else {
+            Advertisement::ExtNonconnectableScannableUndirected {
+                scan_data: scan_payload.as_slice(),
             }
         };
         let set = AdvertisementSet {
@@ -2361,6 +2366,7 @@ async fn advertise_nonconnectable(
         let mut handles = AdvertisementSet::handles(&sets);
         let _advertiser = peripheral.advertise_ext(&sets, &mut handles).await?;
         enable_periodic_advertising(stack, cfg).await?;
+        log_str(cfg, "[adv] extended advertising started\0");
         wait_unload().await;
         return Ok(());
     }
@@ -2375,6 +2381,7 @@ async fn advertise_nonconnectable(
                 },
             )
             .await?;
+        log_str(cfg, "[adv] legacy advertising started\0");
         wait_unload().await;
     } else {
         let _advertiser = peripheral
@@ -2386,6 +2393,7 @@ async fn advertise_nonconnectable(
                 },
             )
             .await?;
+        log_str(cfg, "[adv] legacy advertising started\0");
         wait_unload().await;
     }
     Ok(())
@@ -2445,6 +2453,7 @@ async fn enable_periodic_advertising(
     stack
         .command(LeSetPeriodicAdvEnable::new(true, handle))
         .await?;
+    log_str(cfg, "[adv] periodic advertising enabled\0");
     Ok(())
 }
 
