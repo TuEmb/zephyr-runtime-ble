@@ -40,9 +40,10 @@ static const runtime_ble_desc_def_t tx_descs[] = {
 	  .value = tx_desc, .value_len = sizeof(tx_desc) - 1 },
 };
 
-/* Flat characteristic indices, in declaration order below. */
-#define CHR_RX 0
-#define CHR_TX 1
+/* Flat characteristic indices, resolved by UUID at runtime (see main()) instead
+ * of hard-coding the declaration order — robust to adding/reordering chars. */
+static int chr_rx = -1;
+static int chr_tx = -1;
 
 static const runtime_ble_char_def_t my_chars[] = {
 	{ .uuid = rx_uuid, .uuid_len = 16,
@@ -102,8 +103,8 @@ static void on_write(uint16_t chr, const uint8_t *data, size_t len, void *user)
 {
 	ARG_UNUSED(user);
 	printk("[app] write chr=%u len=%u -> echo on TX\n", chr, (unsigned int)len);
-	if (chr == CHR_RX) {
-		(void)runtime_ble_notify(CHR_TX, data, len);
+	if ((int)chr == chr_rx && chr_tx >= 0) {
+		(void)runtime_ble_notify((uint16_t)chr_tx, data, len);
 	}
 }
 
@@ -255,6 +256,10 @@ int main(void)
 	       addr[5], addr[4], addr[3], addr[2], addr[1], addr[0]);
 
 	runtime_ble_init(&cfg);
+	/* Resolve characteristic indices by UUID rather than hard-coding them. */
+	chr_rx = runtime_ble_char_index(rx_uuid, sizeof(rx_uuid));
+	chr_tx = runtime_ble_char_index(tx_uuid, sizeof(tx_uuid));
+	printk("[app] resolved chr_rx=%d chr_tx=%d\n", chr_rx, chr_tx);
 	if (runtime_ble_load() != RUNTIME_BLE_OK) {
 		printk("[app] runtime_ble_load failed\n");
 		return 0;

@@ -459,6 +459,14 @@ int runtime_ble_notify(uint16_t chr, const uint8_t *data, size_t len);
  * characteristic must have RUNTIME_BLE_PROP_INDICATE. */
 int runtime_ble_indicate(uint16_t chr, const uint8_t *data, size_t len);
 
+/* Resolve the flat index of the first user-defined characteristic whose UUID
+ * matches `uuid` (little-endian, `uuid_len` 2 or 16). The returned value is the
+ * `chr` index used by runtime_ble_notify/indicate and reported by the on_write /
+ * on_subscription callbacks, so an app can look it up by UUID once (e.g. after
+ * runtime_ble_init) instead of hard-coding a declaration-order index. Returns the
+ * index (>= 0), or a negative error if not found / no user services configured. */
+int runtime_ble_char_index(const uint8_t *uuid, uint8_t uuid_len);
+
 /* Request a link PHY update on the active connection. phy is RUNTIME_BLE_PHY_*. */
 int runtime_ble_set_phy(uint8_t phy);
 

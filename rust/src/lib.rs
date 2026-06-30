@@ -668,6 +668,48 @@ pub extern "C" fn runtime_ble_indicate(chr: u16, data: *const u8, len: usize) ->
     queue_tx(chr as usize, SEND_KIND_INDICATE, data, len)
 }
 
+/// Resolve the flat index of the first user-defined characteristic whose UUID
+/// matches `uuid` (LE bytes, `uuid_len` 2 or 16). Walks `config.services` in the
+/// same declaration order that build_gatt assigns indices, so the result is the
+/// `chr` value accepted by runtime_ble_notify/indicate and reported by the
+/// on_write/on_subscription callbacks. Lets an app look characteristics up by UUID
+/// instead of hard-coding a declaration-order index. Returns the index (>= 0), or
+/// a negative RUNTIME_BLE_ERR_* if not configured / not found / arguments invalid.
+#[no_mangle]
+pub extern "C" fn runtime_ble_char_index(uuid: *const u8, uuid_len: u8) -> c_int {
+    if uuid.is_null() || (uuid_len != 2 && uuid_len != 16) {
+        return RUNTIME_BLE_ERR_INVALID;
+    }
+    // SAFETY: CONFIG is set once in runtime_ble_init before this is called.
+    let cfg = match unsafe { core::ptr::addr_of!(CONFIG).as_ref().unwrap().as_ref() } {
+        Some(c) => c,
+        None => return RUNTIME_BLE_ERR_INVALID,
+    };
+    if cfg.services.is_null() || cfg.num_services == 0 {
+        return RUNTIME_BLE_ERR_INVALID; // built-in NUS: no user-defined chars
+    }
+    let want = unsafe { core::slice::from_raw_parts(uuid, uuid_len as usize) };
+    let services =
+        unsafe { core::slice::from_raw_parts(cfg.services, cfg.num_services as usize) };
+    let mut idx: u16 = 0;
+    for s in services {
+        if s.chars.is_null() {
+            continue;
+        }
+        let cdefs = unsafe { core::slice::from_raw_parts(s.chars, s.num_chars as usize) };
+        for c in cdefs {
+            if c.uuid_len == uuid_len && !c.uuid.is_null() {
+                let have = unsafe { core::slice::from_raw_parts(c.uuid, c.uuid_len as usize) };
+                if have == want {
+                    return idx as c_int;
+                }
+            }
+            idx += 1;
+        }
+    }
+    RUNTIME_BLE_ERR_INVALID
+}
+
 fn link_cmd(cmd: u32) -> c_int {
     if LINK_CMD.load(Ordering::Acquire) != LCMD_NONE {
         return RUNTIME_BLE_ERR_NO_MEM;
