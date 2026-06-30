@@ -356,6 +356,7 @@ pub struct RuntimeBleConfig {
     pub security_oob_available: u8,
     pub security_io_capability: u8,
     pub bond_slot_count: u8,
+    pub sdc_disable: u32,
     pub callbacks: RuntimeBleCallbacks,
     pub user: *mut c_void,
 }
@@ -422,6 +423,7 @@ pub(crate) struct RuntimeCfg {
     pub security_oob_available: u8,
     pub security_io_capability: u8,
     pub bond_slot_count: u8,
+    pub sdc_disable: u32,
     pub callbacks: RuntimeBleCallbacks,
     pub user: *mut c_void,
 }
@@ -536,6 +538,16 @@ const RUNTIME_BLE_OK: c_int = 0;
 const RUNTIME_BLE_ERR_INVALID: c_int = -1;
 const RUNTIME_BLE_ERR_NO_MEM: c_int = -2;
 
+// Bits for RuntimeBleConfig.sdc_disable (must match runtime_ble.h). Drop optional
+// SoftDevice Controller features the app does not use. Consumed in chip::build_sdc.
+pub(crate) const SDC_DISABLE_EXT_ADV: u32 = 1 << 0;
+pub(crate) const SDC_DISABLE_PERIODIC_ADV: u32 = 1 << 1;
+pub(crate) const SDC_DISABLE_CODED_PHY: u32 = 1 << 2;
+pub(crate) const SDC_DISABLE_2M_PHY: u32 = 1 << 3;
+pub(crate) const SDC_DISABLE_DLE: u32 = 1 << 4;
+pub(crate) const SDC_DISABLE_SUBRATING: u32 = 1 << 5;
+pub(crate) const SDC_DISABLE_FRAME_SPACE: u32 = 1 << 6;
+
 /// Configure the library. Copies `cfg`. Call once before `runtime_ble_run`.
 #[no_mangle]
 pub extern "C" fn runtime_ble_init(cfg: *const RuntimeBleConfig) -> c_int {
@@ -617,6 +629,7 @@ pub extern "C" fn runtime_ble_init(cfg: *const RuntimeBleConfig) -> c_int {
             security_oob_available: c.security_oob_available,
             security_io_capability: c.security_io_capability,
             bond_slot_count: c.bond_slot_count,
+            sdc_disable: c.sdc_disable,
             callbacks: c.callbacks,
             user: c.user,
         });

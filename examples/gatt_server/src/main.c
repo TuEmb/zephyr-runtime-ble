@@ -227,6 +227,10 @@ int main(void)
 		.security_bondable = 1,
 		.security_io_capability = RUNTIME_BLE_IO_CAP_DISPLAY_YES_NO,
 		.bond_slot_count = 1,
+		/* This legacy 1M/2M connectable peripheral never uses the Coded PHY or
+		 * connection subrating; trim them from the controller's feature set. */
+		.sdc_disable = RUNTIME_BLE_SDC_DISABLE_CODED_PHY |
+			       RUNTIME_BLE_SDC_DISABLE_SUBRATING,
 		.callbacks = {
 			.on_connected = on_connected,
 			.on_disconnected = on_disconnected,

@@ -80,6 +80,17 @@ extern "C" {
 #define RUNTIME_BLE_PERIODIC_ADV_DISABLED 0
 #define RUNTIME_BLE_PERIODIC_ADV_ENABLED  1
 
+/* Bits for runtime_ble_config_t.sdc_disable: drop optional SoftDevice Controller
+ * features the app does not use. A feature the app actually configures is kept
+ * regardless (extended/periodic advertising force EXT_ADV on). */
+#define RUNTIME_BLE_SDC_DISABLE_EXT_ADV      (1u << 0)  /* extended advertising      */
+#define RUNTIME_BLE_SDC_DISABLE_PERIODIC_ADV (1u << 1)  /* periodic advertising      */
+#define RUNTIME_BLE_SDC_DISABLE_CODED_PHY    (1u << 2)  /* LE Coded PHY (long range) */
+#define RUNTIME_BLE_SDC_DISABLE_2M_PHY       (1u << 3)  /* LE 2M PHY                 */
+#define RUNTIME_BLE_SDC_DISABLE_DLE          (1u << 4)  /* Data Length Extension     */
+#define RUNTIME_BLE_SDC_DISABLE_SUBRATING    (1u << 5)  /* LE connection subrating   */
+#define RUNTIME_BLE_SDC_DISABLE_FRAME_SPACE  (1u << 6)  /* frame-space update        */
+
 /* Frame spacing type bits for runtime_ble_update_frame_space(). */
 #define RUNTIME_BLE_FRAME_SPACE_ACL_CP (1u << 0)
 #define RUNTIME_BLE_FRAME_SPACE_ACL_PC (1u << 1)
@@ -427,6 +438,15 @@ typedef struct {
 	uint8_t                 security_oob_available;
 	uint8_t                 security_io_capability; /* RUNTIME_BLE_IO_CAP_*; 0 -> no input/output */
 	uint8_t                 bond_slot_count;      /* 0 -> RUNTIME_BLE_BOND_SLOTS_DEFAULT */
+
+	/* Trim optional SoftDevice Controller features this app does not use, to lower
+	 * the controller's runtime footprint. Bitmask of RUNTIME_BLE_SDC_DISABLE_*;
+	 * 0 (default) keeps the full feature set. A feature the app actually uses is
+	 * kept regardless (e.g. extended/periodic advertising forces ext-adv on).
+	 * NOTE: the controller memory pool is reserved at a fixed size, so this mainly
+	 * trims the active feature set; for true RAM/flash savings build the lean
+	 * library variant (CONFIG_RUNTIME_BLE_LEAN). */
+	uint32_t                sdc_disable;
 
 	runtime_ble_callbacks_t callbacks;
 	void                   *user;                 /* opaque, passed back to callbacks      */

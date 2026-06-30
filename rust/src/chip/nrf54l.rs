@@ -74,40 +74,70 @@ pub extern "C" fn runtime_irq_swi00() {
 }
 
 fn build_sdc<'d, const N: usize>(
+    cfg: &RuntimeCfg,
     p: nrf_sdc::Peripherals<'d>,
     rng: &'d mut cracen::Cracen<'static, Blocking>,
     mpsl: &'d MultiprotocolServiceLayer,
     mem: &'d mut sdc::Mem<N>,
 ) -> Result<nrf_sdc::SoftdeviceController<'d>, nrf_sdc::Error> {
-    let b = sdc::Builder::new()?
-        .support_adv()
-        .support_ext_adv()
-        .support_peripheral()
-        .support_le_2m_phy()
-        .support_le_coded_phy()
-        .support_le_periodic_adv()
-        .support_phy_update_peripheral()
-        .support_dle_peripheral()
-        .support_frame_space_update_peripheral()
-        .support_extended_feature_set()
-        .support_connection_subrating_peripheral();
+    let dis = cfg.sdc_disable;
+    // A feature the app actually configures is kept regardless of the disable mask.
+    let want_ext_adv = cfg.adv_extended != 0
+        || cfg.periodic_adv != 0
+        || (dis & crate::SDC_DISABLE_EXT_ADV) == 0;
+    let want_periodic = cfg.periodic_adv != 0 || (dis & crate::SDC_DISABLE_PERIODIC_ADV) == 0;
+
+    let mut b = sdc::Builder::new()?.support_adv().support_peripheral();
+    if want_ext_adv {
+        b = b.support_ext_adv();
+    }
+    if (dis & crate::SDC_DISABLE_2M_PHY) == 0 {
+        b = b.support_le_2m_phy();
+    }
+    if (dis & crate::SDC_DISABLE_CODED_PHY) == 0 {
+        b = b.support_le_coded_phy();
+    }
+    if want_periodic {
+        b = b.support_le_periodic_adv();
+    }
+    b = b.support_phy_update_peripheral();
+    if (dis & crate::SDC_DISABLE_DLE) == 0 {
+        b = b.support_dle_peripheral();
+    }
+    if (dis & crate::SDC_DISABLE_FRAME_SPACE) == 0 {
+        b = b.support_frame_space_update_peripheral();
+    }
+    b = b.support_extended_feature_set();
+    if (dis & crate::SDC_DISABLE_SUBRATING) == 0 {
+        b = b.support_connection_subrating_peripheral();
+    }
     #[cfg(feature = "central")]
-    let b = b
-        .support_scan()
-        .support_ext_scan()
-        .support_central()
-        .support_ext_central()
-        .support_phy_update_central()
-        .support_dle_central()
-        .support_frame_space_update_central()
-        .support_connection_subrating_central();
-    let b = b
-        .peripheral_count(1)?
-        .adv_count(1)?
-        .adv_buffer_cfg(EXT_ADV_DATA_MAX as u16)?
-        .periodic_adv_count(1)?;
+    {
+        b = b
+            .support_scan()
+            .support_ext_scan()
+            .support_central()
+            .support_ext_central()
+            .support_phy_update_central();
+        if (dis & crate::SDC_DISABLE_DLE) == 0 {
+            b = b.support_dle_central();
+        }
+        if (dis & crate::SDC_DISABLE_FRAME_SPACE) == 0 {
+            b = b.support_frame_space_update_central();
+        }
+        if (dis & crate::SDC_DISABLE_SUBRATING) == 0 {
+            b = b.support_connection_subrating_central();
+        }
+    }
+    let adv_buf = (if want_ext_adv { EXT_ADV_DATA_MAX } else { 31 }) as u16;
+    b = b.peripheral_count(1)?.adv_count(1)?.adv_buffer_cfg(adv_buf)?;
+    if want_periodic {
+        b = b.periodic_adv_count(1)?;
+    }
     #[cfg(feature = "central")]
-    let b = b.central_count(1)?;
+    {
+        b = b.central_count(1)?;
+    }
     b.buffer_cfg(
         DefaultPacketPool::MTU as u16,
         DefaultPacketPool::MTU as u16,
@@ -180,7 +210,7 @@ pub(crate) fn run(cfg: Option<&'static RuntimeCfg>, _mode: c_int) {
     );
     let rng_ptr = Box::into_raw(Box::new(cracen::Cracen::new_blocking(p.CRACEN)));
     let mem_ptr = Box::into_raw(Box::new(sdc::Mem::<SDC_MEM>::new()));
-    let sdc = match build_sdc(sdc_p, unsafe { &mut *rng_ptr }, mpsl, unsafe {
+    let sdc = match build_sdc(cfg, sdc_p, unsafe { &mut *rng_ptr }, mpsl, unsafe {
         &mut *mem_ptr
     }) {
         Ok(s) => s,
