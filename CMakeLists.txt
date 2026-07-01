@@ -46,11 +46,21 @@ else()
   endif()
 endif()
 
-set(RTBLE_LIB ${RTBLE_DIR}/lib/${RTBLE_CHIP}/libruntime_ble${RTBLE_VARIANT}.a)
-if(NOT EXISTS ${RTBLE_LIB})
-  message(FATAL_ERROR "runtime-ble: ${RTBLE_LIB} not found. "
-                      "Build the Rust staticlib for these roles (Cargo features "
-                      "'${RTBLE_VARIANT}') — see rust/README.md.")
+# Resolve the staticlib: prefer a blob fetched by `west blobs fetch zephyr-runtime-ble`
+# (zephyr/blobs/<chip>/), else the copy committed under lib/<chip>/ (the fallback
+# during development / if blobs are not used). See zephyr/module.yml `blobs:`.
+set(RTBLE_NAME libruntime_ble${RTBLE_VARIANT}.a)
+set(RTBLE_BLOB ${RTBLE_DIR}/zephyr/blobs/${RTBLE_CHIP}/${RTBLE_NAME})
+set(RTBLE_COMMITTED ${RTBLE_DIR}/lib/${RTBLE_CHIP}/${RTBLE_NAME})
+if(EXISTS ${RTBLE_BLOB})
+  set(RTBLE_LIB ${RTBLE_BLOB})
+elseif(EXISTS ${RTBLE_COMMITTED})
+  set(RTBLE_LIB ${RTBLE_COMMITTED})
+else()
+  message(FATAL_ERROR "runtime-ble: ${RTBLE_NAME} for ${RTBLE_CHIP} not found. "
+                      "Run `west blobs fetch zephyr-runtime-ble`, or build the Rust "
+                      "staticlib for these roles (Cargo features '${RTBLE_VARIANT}') "
+                      "— see rust/README.md.")
 endif()
 
 # Prebuilt Rust staticlib (owns the radio; build the app with CONFIG_BT=n).

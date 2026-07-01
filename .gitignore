@@ -5,6 +5,9 @@ rust/target/
 build/
 examples/*/build/
 
+# Blobs fetched by `west blobs fetch zephyr-runtime-ble` (see zephyr/module.yml)
+zephyr/blobs/
+
 # Editor / OS
 *.swp
 .DS_Store

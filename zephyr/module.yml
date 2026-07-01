@@ -4,3 +4,250 @@ build:
   kconfig: Kconfig
   settings:
     board_root: .
+
+blobs:
+  - path: nrf52832/libruntime_ble.a
+    sha256: cffec6fc4c5c7bde9e118bfef2e02f4ee014d7122ab6bfab739d84ea17bd7f1c
+    type: lib
+    version: "1"
+    license-path: LICENSE
+    url: https://github.com/TuEmb/zephyr-runtime-ble/releases/download/blobs-v1/nrf52832__libruntime_ble.a
+    description: runtime-ble prebuilt staticlib (nrf52832, libruntime_ble.a)
+  - path: nrf52832/libruntime_ble_central.a
+    sha256: af90b85e110c30b0fcc3f5a95d0f491e136b612b50b20470ff56e93bf0c8a0ce
+    type: lib
+    version: "1"
+    license-path: LICENSE
+    url: https://github.com/TuEmb/zephyr-runtime-ble/releases/download/blobs-v1/nrf52832__libruntime_ble_central.a
+    description: runtime-ble prebuilt staticlib (nrf52832, libruntime_ble_central.a)
+  - path: nrf52832/libruntime_ble_central_l2cap.a
+    sha256: 4d6bcda0bc7ae29c27205c29d159a05761aa9f6259a9aa3ad444228d43ae9592
+    type: lib
+    version: "1"
+    license-path: LICENSE
+    url: https://github.com/TuEmb/zephyr-runtime-ble/releases/download/blobs-v1/nrf52832__libruntime_ble_central_l2cap.a
+    description: runtime-ble prebuilt staticlib (nrf52832, libruntime_ble_central_l2cap.a)
+  - path: nrf52832/libruntime_ble_l2cap.a
+    sha256: cfc04ecc94dad23af0b949147496e4f8dc468c8b2fad8f8ec67cd5c630b9b31b
+    type: lib
+    version: "1"
+    license-path: LICENSE
+    url: https://github.com/TuEmb/zephyr-runtime-ble/releases/download/blobs-v1/nrf52832__libruntime_ble_l2cap.a
+    description: runtime-ble prebuilt staticlib (nrf52832, libruntime_ble_l2cap.a)
+  - path: nrf52832/libruntime_ble_perf.a
+    sha256: bc762e5b520e902a9097f8843a132ed7d1efa05747f33d70ce809dd58fdc4df9
+    type: lib
+    version: "1"
+    license-path: LICENSE
+    url: https://github.com/TuEmb/zephyr-runtime-ble/releases/download/blobs-v1/nrf52832__libruntime_ble_perf.a
+    description: runtime-ble prebuilt staticlib (nrf52832, libruntime_ble_perf.a)
+  - path: nrf52833/libruntime_ble.a
+    sha256: 47c4d751628ea0a09e2110bac04fa6cced318d6310b626979da70e4e9fadad0c
+    type: lib
+    version: "1"
+    license-path: LICENSE
+    url: https://github.com/TuEmb/zephyr-runtime-ble/releases/download/blobs-v1/nrf52833__libruntime_ble.a
+    description: runtime-ble prebuilt staticlib (nrf52833, libruntime_ble.a)
+  - path: nrf52833/libruntime_ble_central.a
+    sha256: 95673ebf211834342815fe7a4db1a1ef8f52f5665dd808b1c2d0ea1589c16705
+    type: lib
+    version: "1"
+    license-path: LICENSE
+    url: https://github.com/TuEmb/zephyr-runtime-ble/releases/download/blobs-v1/nrf52833__libruntime_ble_central.a
+    description: runtime-ble prebuilt staticlib (nrf52833, libruntime_ble_central.a)
+  - path: nrf52833/libruntime_ble_central_l2cap.a
+    sha256: 2b17f2a271b9caaf10b6de481afe25b0aac6abc1820a24cd22ef7907d6f8b3c5
+    type: lib
+    version: "1"
+    license-path: LICENSE
+    url: https://github.com/TuEmb/zephyr-runtime-ble/releases/download/blobs-v1/nrf52833__libruntime_ble_central_l2cap.a
+    description: runtime-ble prebuilt staticlib (nrf52833, libruntime_ble_central_l2cap.a)
+  - path: nrf52833/libruntime_ble_l2cap.a
+    sha256: dc4d22cda100f2021074230ee7998755b43053490bcf9d0e7067986bddb2dc44
+    type: lib
+    version: "1"
+    license-path: LICENSE
+    url: https://github.com/TuEmb/zephyr-runtime-ble/releases/download/blobs-v1/nrf52833__libruntime_ble_l2cap.a
+    description: runtime-ble prebuilt staticlib (nrf52833, libruntime_ble_l2cap.a)
+  - path: nrf52833/libruntime_ble_perf.a
+    sha256: 231dc279687d4ea5e229ce59254f8c6f3997106fa9ba79cd6856ff8b2922f9ff
+    type: lib
+    version: "1"
+    license-path: LICENSE
+    url: https://github.com/TuEmb/zephyr-runtime-ble/releases/download/blobs-v1/nrf52833__libruntime_ble_perf.a
+    description: runtime-ble prebuilt staticlib (nrf52833, libruntime_ble_perf.a)
+  - path: nrf52840/libruntime_ble.a
+    sha256: e4eb0302c6c94e5790f824fe385a63635772df4afe656a8e7287616e9960b232
+    type: lib
+    version: "1"
+    license-path: LICENSE
+    url: https://github.com/TuEmb/zephyr-runtime-ble/releases/download/blobs-v1/nrf52840__libruntime_ble.a
+    description: runtime-ble prebuilt staticlib (nrf52840, libruntime_ble.a)
+  - path: nrf52840/libruntime_ble_central.a
+    sha256: 3e2868c4b002234f62ef9e9f007778754e33ed593986fc23704014f946a0e5d9
+    type: lib
+    version: "1"
+    license-path: LICENSE
+    url: https://github.com/TuEmb/zephyr-runtime-ble/releases/download/blobs-v1/nrf52840__libruntime_ble_central.a
+    description: runtime-ble prebuilt staticlib (nrf52840, libruntime_ble_central.a)
+  - path: nrf52840/libruntime_ble_central_l2cap.a
+    sha256: d984b012e38e8afe2cc41ee5767d06617b9ca8dce6b99ea3cbc80ba453321585
+    type: lib
+    version: "1"
+    license-path: LICENSE
+    url: https://github.com/TuEmb/zephyr-runtime-ble/releases/download/blobs-v1/nrf52840__libruntime_ble_central_l2cap.a
+    description: runtime-ble prebuilt staticlib (nrf52840, libruntime_ble_central_l2cap.a)
+  - path: nrf52840/libruntime_ble_l2cap.a
+    sha256: 410fa85e61aee35c85f520f946ccf1c7265d8ae62d56fb496510acbb1f8b07f5
+    type: lib
+    version: "1"
+    license-path: LICENSE
+    url: https://github.com/TuEmb/zephyr-runtime-ble/releases/download/blobs-v1/nrf52840__libruntime_ble_l2cap.a
+    description: runtime-ble prebuilt staticlib (nrf52840, libruntime_ble_l2cap.a)
+  - path: nrf52840/libruntime_ble_perf.a
+    sha256: d012cd1a5779d7024aead4f1ee619739952c14180443d12839d1b1bbdd22624d
+    type: lib
+    version: "1"
+    license-path: LICENSE
+    url: https://github.com/TuEmb/zephyr-runtime-ble/releases/download/blobs-v1/nrf52840__libruntime_ble_perf.a
+    description: runtime-ble prebuilt staticlib (nrf52840, libruntime_ble_perf.a)
+  - path: nrf54l05/libruntime_ble.a
+    sha256: d6c31fabdb18e8fd48a27aab201b4979ad9945d10e21b12cf51f8315a0e2211c
+    type: lib
+    version: "1"
+    license-path: LICENSE
+    url: https://github.com/TuEmb/zephyr-runtime-ble/releases/download/blobs-v1/nrf54l05__libruntime_ble.a
+    description: runtime-ble prebuilt staticlib (nrf54l05, libruntime_ble.a)
+  - path: nrf54l05/libruntime_ble_central.a
+    sha256: 26c5b45abc8e2d04efb0fe033b83b03f506e2d66e7ab4de706d1b5b7af4053c4
+    type: lib
+    version: "1"
+    license-path: LICENSE
+    url: https://github.com/TuEmb/zephyr-runtime-ble/releases/download/blobs-v1/nrf54l05__libruntime_ble_central.a
+    description: runtime-ble prebuilt staticlib (nrf54l05, libruntime_ble_central.a)
+  - path: nrf54l05/libruntime_ble_central_l2cap.a
+    sha256: a7fdef853859159dce58a2cb5633fde6e97ec01e34fb3a80079dddaba5e29c01
+    type: lib
+    version: "1"
+    license-path: LICENSE
+    url: https://github.com/TuEmb/zephyr-runtime-ble/releases/download/blobs-v1/nrf54l05__libruntime_ble_central_l2cap.a
+    description: runtime-ble prebuilt staticlib (nrf54l05, libruntime_ble_central_l2cap.a)
+  - path: nrf54l05/libruntime_ble_l2cap.a
+    sha256: 302b6cbed34f304cbc2cdc6040b25e8128113a0b3ae775f62f1e6b614a43546f
+    type: lib
+    version: "1"
+    license-path: LICENSE
+    url: https://github.com/TuEmb/zephyr-runtime-ble/releases/download/blobs-v1/nrf54l05__libruntime_ble_l2cap.a
+    description: runtime-ble prebuilt staticlib (nrf54l05, libruntime_ble_l2cap.a)
+  - path: nrf54l05/libruntime_ble_perf.a
+    sha256: 112162049b25b565df1e1af22d4d4732923ddbc6d73466892abba935cc0c2afb
+    type: lib
+    version: "1"
+    license-path: LICENSE
+    url: https://github.com/TuEmb/zephyr-runtime-ble/releases/download/blobs-v1/nrf54l05__libruntime_ble_perf.a
+    description: runtime-ble prebuilt staticlib (nrf54l05, libruntime_ble_perf.a)
+  - path: nrf54l10/libruntime_ble.a
+    sha256: d6c31fabdb18e8fd48a27aab201b4979ad9945d10e21b12cf51f8315a0e2211c
+    type: lib
+    version: "1"
+    license-path: LICENSE
+    url: https://github.com/TuEmb/zephyr-runtime-ble/releases/download/blobs-v1/nrf54l10__libruntime_ble.a
+    description: runtime-ble prebuilt staticlib (nrf54l10, libruntime_ble.a)
+  - path: nrf54l10/libruntime_ble_central.a
+    sha256: 26c5b45abc8e2d04efb0fe033b83b03f506e2d66e7ab4de706d1b5b7af4053c4
+    type: lib
+    version: "1"
+    license-path: LICENSE
+    url: https://github.com/TuEmb/zephyr-runtime-ble/releases/download/blobs-v1/nrf54l10__libruntime_ble_central.a
+    description: runtime-ble prebuilt staticlib (nrf54l10, libruntime_ble_central.a)
+  - path: nrf54l10/libruntime_ble_central_l2cap.a
+    sha256: a7fdef853859159dce58a2cb5633fde6e97ec01e34fb3a80079dddaba5e29c01
+    type: lib
+    version: "1"
+    license-path: LICENSE
+    url: https://github.com/TuEmb/zephyr-runtime-ble/releases/download/blobs-v1/nrf54l10__libruntime_ble_central_l2cap.a
+    description: runtime-ble prebuilt staticlib (nrf54l10, libruntime_ble_central_l2cap.a)
+  - path: nrf54l10/libruntime_ble_l2cap.a
+    sha256: 302b6cbed34f304cbc2cdc6040b25e8128113a0b3ae775f62f1e6b614a43546f
+    type: lib
+    version: "1"
+    license-path: LICENSE
+    url: https://github.com/TuEmb/zephyr-runtime-ble/releases/download/blobs-v1/nrf54l10__libruntime_ble_l2cap.a
+    description: runtime-ble prebuilt staticlib (nrf54l10, libruntime_ble_l2cap.a)
+  - path: nrf54l10/libruntime_ble_perf.a
+    sha256: 112162049b25b565df1e1af22d4d4732923ddbc6d73466892abba935cc0c2afb
+    type: lib
+    version: "1"
+    license-path: LICENSE
+    url: https://github.com/TuEmb/zephyr-runtime-ble/releases/download/blobs-v1/nrf54l10__libruntime_ble_perf.a
+    description: runtime-ble prebuilt staticlib (nrf54l10, libruntime_ble_perf.a)
+  - path: nrf54l15/libruntime_ble.a
+    sha256: d6c31fabdb18e8fd48a27aab201b4979ad9945d10e21b12cf51f8315a0e2211c
+    type: lib
+    version: "1"
+    license-path: LICENSE
+    url: https://github.com/TuEmb/zephyr-runtime-ble/releases/download/blobs-v1/nrf54l15__libruntime_ble.a
+    description: runtime-ble prebuilt staticlib (nrf54l15, libruntime_ble.a)
+  - path: nrf54l15/libruntime_ble_central.a
+    sha256: 26c5b45abc8e2d04efb0fe033b83b03f506e2d66e7ab4de706d1b5b7af4053c4
+    type: lib
+    version: "1"
+    license-path: LICENSE
+    url: https://github.com/TuEmb/zephyr-runtime-ble/releases/download/blobs-v1/nrf54l15__libruntime_ble_central.a
+    description: runtime-ble prebuilt staticlib (nrf54l15, libruntime_ble_central.a)
+  - path: nrf54l15/libruntime_ble_central_l2cap.a
+    sha256: a7fdef853859159dce58a2cb5633fde6e97ec01e34fb3a80079dddaba5e29c01
+    type: lib
+    version: "1"
+    license-path: LICENSE
+    url: https://github.com/TuEmb/zephyr-runtime-ble/releases/download/blobs-v1/nrf54l15__libruntime_ble_central_l2cap.a
+    description: runtime-ble prebuilt staticlib (nrf54l15, libruntime_ble_central_l2cap.a)
+  - path: nrf54l15/libruntime_ble_l2cap.a
+    sha256: 302b6cbed34f304cbc2cdc6040b25e8128113a0b3ae775f62f1e6b614a43546f
+    type: lib
+    version: "1"
+    license-path: LICENSE
+    url: https://github.com/TuEmb/zephyr-runtime-ble/releases/download/blobs-v1/nrf54l15__libruntime_ble_l2cap.a
+    description: runtime-ble prebuilt staticlib (nrf54l15, libruntime_ble_l2cap.a)
+  - path: nrf54l15/libruntime_ble_perf.a
+    sha256: 112162049b25b565df1e1af22d4d4732923ddbc6d73466892abba935cc0c2afb
+    type: lib
+    version: "1"
+    license-path: LICENSE
+    url: https://github.com/TuEmb/zephyr-runtime-ble/releases/download/blobs-v1/nrf54l15__libruntime_ble_perf.a
+    description: runtime-ble prebuilt staticlib (nrf54l15, libruntime_ble_perf.a)
+  - path: nrf54lm20/libruntime_ble.a
+    sha256: cd6c7164a0a0910af9271b3af6afec8c03064197ea586d8d9a975206f5f82947
+    type: lib
+    version: "1"
+    license-path: LICENSE
+    url: https://github.com/TuEmb/zephyr-runtime-ble/releases/download/blobs-v1/nrf54lm20__libruntime_ble.a
+    description: runtime-ble prebuilt staticlib (nrf54lm20, libruntime_ble.a)
+  - path: nrf54lm20/libruntime_ble_central.a
+    sha256: 547b53094ae8ec10f82d4f0e3f70acfbe24a3cc52bbf2955b6a8af86ea2089aa
+    type: lib
+    version: "1"
+    license-path: LICENSE
+    url: https://github.com/TuEmb/zephyr-runtime-ble/releases/download/blobs-v1/nrf54lm20__libruntime_ble_central.a
+    description: runtime-ble prebuilt staticlib (nrf54lm20, libruntime_ble_central.a)
+  - path: nrf54lm20/libruntime_ble_central_l2cap.a
+    sha256: 6ed31fc26f961ca7f1fdfc55ff5ca0b867b6d77a76a7f271a280898db76bd9cf
+    type: lib
+    version: "1"
+    license-path: LICENSE
+    url: https://github.com/TuEmb/zephyr-runtime-ble/releases/download/blobs-v1/nrf54lm20__libruntime_ble_central_l2cap.a
+    description: runtime-ble prebuilt staticlib (nrf54lm20, libruntime_ble_central_l2cap.a)
+  - path: nrf54lm20/libruntime_ble_l2cap.a
+    sha256: 1a43359d1690facf559da6ebda151fcbd593f629ba9f0197df0deac07b7c0408
+    type: lib
+    version: "1"
+    license-path: LICENSE
+    url: https://github.com/TuEmb/zephyr-runtime-ble/releases/download/blobs-v1/nrf54lm20__libruntime_ble_l2cap.a
+    description: runtime-ble prebuilt staticlib (nrf54lm20, libruntime_ble_l2cap.a)
+  - path: nrf54lm20/libruntime_ble_perf.a
+    sha256: d29fb09c14c5dd682226a40f1697fbf497ac5bfa7a4d279b2caa433feef98fce
+    type: lib
+    version: "1"
+    license-path: LICENSE
+    url: https://github.com/TuEmb/zephyr-runtime-ble/releases/download/blobs-v1/nrf54lm20__libruntime_ble_perf.a
+    description: runtime-ble prebuilt staticlib (nrf54lm20, libruntime_ble_perf.a)

@@ -136,6 +136,20 @@ The prebuilt `lib/<chip>/libruntime_ble.a` is committed (so `west update` brings
 only after editing `rust/` — see [`rust/README.md`](rust/README.md) for the per-platform
 (Linux / macOS / Windows) cargo + bindgen recipe.
 
+### 4. Prebuilt libs as Zephyr blobs (optional distribution)
+The staticlibs are also declared as **Zephyr binary blobs** in
+[`zephyr/module.yml`](zephyr/module.yml) (`blobs:`, one per chip/variant, checksummed).
+`CMakeLists.txt` uses a fetched blob (`zephyr/blobs/<chip>/…`) if present, otherwise the
+committed `lib/<chip>/…` — so nothing changes until you opt in:
+```sh
+west blobs list zephyr-runtime-ble
+west blobs fetch zephyr-runtime-ble     # downloads to zephyr/blobs/ (gitignored)
+```
+This lets the ~200 MB of binaries live in a **GitHub release** instead of git. To slim
+the repo (maintainers): publish the current `lib/**/*.a` as release assets named
+`<chip>__<lib>.a` under the tag in each blob `url` (the `sha256` values already match the
+committed libs), then `git rm -r lib/`; consumers then get the libs via `west blobs fetch`.
+
 ## Integration / config
 
 runtime-ble needs four coupled Kconfig options set in the **app's** `prj.conf`
