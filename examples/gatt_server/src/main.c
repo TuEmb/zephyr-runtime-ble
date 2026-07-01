@@ -213,6 +213,7 @@ static void on_bond_deleted(uint8_t index, int8_t status, void *user)
 int main(void)
 {
 	static const runtime_ble_config_t cfg = {
+		.abi_version = RUNTIME_BLE_ABI_VERSION,
 		.device_name = "RUNTIME-BLE",
 		.adv_data = adv_data,
 		.adv_data_len = sizeof(adv_data),

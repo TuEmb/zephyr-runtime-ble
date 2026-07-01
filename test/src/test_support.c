@@ -62,6 +62,7 @@ static void on_oob_local_data(const uint8_t *local_random, const uint8_t *local_
 }
 
 static const runtime_ble_config_t cfg = {
+	.abi_version = RUNTIME_BLE_ABI_VERSION,
 	.device_name = "RTBLE-TEST",
 	.manufacturer_id = 0xFFFF,
 	.adv_interval_min_ms = 30,

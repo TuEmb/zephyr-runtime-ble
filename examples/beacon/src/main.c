@@ -29,6 +29,7 @@ static void on_log(const char *line, void *user)
 int main(void)
 {
 	static const runtime_ble_config_t cfg = {
+		.abi_version = RUNTIME_BLE_ABI_VERSION,
 		.device_name = "RTBLE-BEACON",
 		.adv_service_data_uuid = svc_data_uuid,
 		.adv_service_data_uuid_len = sizeof(svc_data_uuid),

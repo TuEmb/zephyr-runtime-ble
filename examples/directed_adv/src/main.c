@@ -32,6 +32,7 @@ static void on_disconnected(uint8_t reason, void *user)
 int main(void)
 {
 	static const runtime_ble_config_t cfg = {
+		.abi_version = RUNTIME_BLE_ABI_VERSION,
 		.device_name = "RTBLE-DIRECTED",
 		.directed_peer_address = peer_addr,
 		.directed_peer_address_kind = RUNTIME_BLE_ADDR_RANDOM,

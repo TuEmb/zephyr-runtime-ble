@@ -38,10 +38,17 @@
 extern "C" {
 #endif
 
+/* ABI version of this header. runtime_ble_init() rejects a config whose
+ * abi_version does not match the prebuilt library, so a header/lib mismatch
+ * (e.g. a stale header after the lib was updated) fails loudly instead of
+ * corrupting memory. Bump on any change to runtime_ble_config_t / callbacks. */
+#define RUNTIME_BLE_ABI_VERSION 1
+
 /* Result codes. */
 #define RUNTIME_BLE_OK           0
 #define RUNTIME_BLE_ERR_INVALID -1
 #define RUNTIME_BLE_ERR_NO_MEM  -2
+#define RUNTIME_BLE_ERR_ABI     -6  /* config.abi_version != RUNTIME_BLE_ABI_VERSION */
 /* Detailed runtime_ble_load() failures (also reported by runtime_ble_load_status). */
 #define RUNTIME_BLE_ERR_MPSL    -3  /* MPSL (radio timeslot layer) init failed */
 #define RUNTIME_BLE_ERR_SDC     -4  /* SoftDevice Controller init failed (check heap/pool) */
@@ -362,6 +369,9 @@ typedef struct {
  * notify — see `on_data` + `runtime_ble_send`).
  */
 typedef struct {
+	/* MUST be set to RUNTIME_BLE_ABI_VERSION (guards against a header/lib
+	 * mismatch). runtime_ble_init() returns RUNTIME_BLE_ERR_ABI otherwise. */
+	uint32_t                abi_version;
 	const char             *device_name;          /* adv name; NULL -> "RUNTIME-BLE"      */
 	const uint8_t          *adv_data;             /* raw AD structures; NULL -> build from fields */
 	uint8_t                 adv_data_len;         /* raw advertising data length, <=31 */

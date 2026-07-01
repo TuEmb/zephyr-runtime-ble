@@ -167,6 +167,7 @@ static void on_connection_rate(uint16_t interval_ms, uint16_t subrate_factor, ui
 int main(void)
 {
 	static const runtime_ble_config_t cfg = {
+		.abi_version = RUNTIME_BLE_ABI_VERSION,
 		.device_name = "RTBLE-CENTRAL",
 		.role = RUNTIME_BLE_ROLE_CENTRAL,
 		.central_conn_min_interval_ms = 50,

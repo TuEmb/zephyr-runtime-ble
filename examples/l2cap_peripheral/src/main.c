@@ -42,6 +42,7 @@ static void on_l2cap_data(const uint8_t *d, size_t n, void *u)
 int main(void)
 {
 	static const runtime_ble_config_t cfg = {
+		.abi_version = RUNTIME_BLE_ABI_VERSION,
 		.device_name = "RTBLE-L2CAP",
 		.manufacturer_id = 0xFFFF,
 		.l2cap_psm = L2CAP_PSM,

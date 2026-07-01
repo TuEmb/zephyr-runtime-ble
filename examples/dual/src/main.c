@@ -98,6 +98,7 @@ static void on_notification(uint16_t h, const uint8_t *d, size_t n, void *u)
 int main(void)
 {
 	static const runtime_ble_config_t cfg = {
+		.abi_version = RUNTIME_BLE_ABI_VERSION,
 		.device_name = "RTBLE-DUAL",
 		.manufacturer_id = 0xFFFF,
 		.role = RUNTIME_BLE_ROLE_DUAL,

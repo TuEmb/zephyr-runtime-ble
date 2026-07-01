@@ -286,6 +286,8 @@ pub struct RuntimeBleServiceDef {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct RuntimeBleConfig {
+    /// Must equal RUNTIME_BLE_ABI_VERSION; guards against a header/lib mismatch.
+    pub abi_version: u32,
     pub device_name: *const c_char,
     pub adv_data: *const u8,
     pub adv_data_len: u8,
@@ -537,6 +539,10 @@ pub(crate) static BOND_IO_CAPABILITY: AtomicUsize = AtomicUsize::new(0);
 pub(crate) const RUNTIME_BLE_OK: c_int = 0;
 pub(crate) const RUNTIME_BLE_ERR_INVALID: c_int = -1;
 const RUNTIME_BLE_ERR_NO_MEM: c_int = -2;
+const RUNTIME_BLE_ERR_ABI: c_int = -6;
+/// ABI version of the config/callback layout (must match runtime_ble.h). Bump on
+/// any change to RuntimeBleConfig / RuntimeBleCallbacks.
+const RUNTIME_BLE_ABI_VERSION: u32 = 1;
 // Detailed load-failure codes (must match runtime_ble.h). Set by the runtime
 // thread during bring-up and returned by runtime_ble_load() / _load_status().
 pub(crate) const RUNTIME_BLE_ERR_MPSL: c_int = -3;
@@ -573,6 +579,9 @@ pub extern "C" fn runtime_ble_init(cfg: *const RuntimeBleConfig) -> c_int {
         return RUNTIME_BLE_ERR_INVALID;
     }
     let c = unsafe { &*cfg };
+    if c.abi_version != RUNTIME_BLE_ABI_VERSION {
+        return RUNTIME_BLE_ERR_ABI;
+    }
     if c.l2cap_credit_policy > 1
         || (c.l2cap_mtu != 0 && c.l2cap_mtu < 23)
         || (c.l2cap_mps != 0 && c.l2cap_mps < 23)
