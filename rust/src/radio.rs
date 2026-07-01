@@ -101,6 +101,20 @@ extern "C" {
     fn runtime_ble_wait();
     fn runtime_ble_wake();
     fn runtime_ble_addr(out: *mut u8);
+    /// Signal glue's runtime_ble_load() that bring-up finished (see load status).
+    fn runtime_ble_load_done();
+}
+
+/// Publish the bring-up result and wake glue's runtime_ble_load(). Called once by
+/// the runtime thread at the end of setup (success or failure).
+pub(crate) fn signal_load_done(status: core::ffi::c_int) {
+    crate::LOAD_STATUS.store(status, Ordering::Release);
+    unsafe { runtime_ble_load_done() };
+}
+
+/// Mark bring-up in progress at the start of a load (before any fallible step).
+pub(crate) fn signal_load_pending() {
+    crate::LOAD_STATUS.store(crate::RUNTIME_BLE_LOAD_PENDING, Ordering::Release);
 }
 
 // ---------------------------------------------------------------------------

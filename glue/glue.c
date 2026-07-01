@@ -59,6 +59,14 @@ void runtime_ble_wake(void)
 	k_sem_give(&runtime_sem);
 }
 
+/* Bring-up handshake: the runtime thread gives this once it has published the
+ * load result (runtime_ble_load_status), so runtime_ble_load() can wait + report. */
+static struct k_sem runtime_load_sem;
+void runtime_ble_load_done(void)
+{
+	k_sem_give(&runtime_load_sem);
+}
+
 /* embassy-time alarm */
 extern void runtime_alarm_fired(void);
 static struct k_timer runtime_timer;
@@ -90,6 +98,26 @@ static void runtime_entry(void *a, void *b, void *c)
 	runtime_ble_run(0); /* returns on unload */
 }
 
+/* Enable/disable the MPSL/SDC IRQs for the lifetime of a session. */
+static void ble_irqs_set(bool en)
+{
+#if defined(CONFIG_SOC_SERIES_NRF54L) || defined(CONFIG_SOC_SERIES_NRF54LX) || \
+	defined(CONFIG_SOC_SERIES_NRF54LM20)
+	const unsigned int lines[] = {RADIO_0_IRQn, TIMER10_IRQn, GRTC_3_IRQn, SWI00_IRQn};
+#elif defined(CONFIG_SOC_SERIES_NRF52) || defined(CONFIG_SOC_SERIES_NRF52X)
+	const unsigned int lines[] = {RADIO_IRQn, TIMER0_IRQn, RTC0_IRQn, SWI0_EGU0_IRQn};
+#else
+#error "runtime-ble: unsupported SoC. Add the MPSL/SDC IRQ wiring for your chip."
+#endif
+	for (size_t i = 0; i < ARRAY_SIZE(lines); i++) {
+		if (en) {
+			irq_enable(lines[i]);
+		} else {
+			irq_disable(lines[i]);
+		}
+	}
+}
+
 int runtime_ble_load(void)
 {
 	if (runtime_loaded) {
@@ -101,26 +129,30 @@ int runtime_ble_load(void)
 		return RUNTIME_BLE_ERR_NO_MEM;
 	}
 	k_sem_reset(&runtime_sem);
-
-#if defined(CONFIG_SOC_SERIES_NRF54L) || defined(CONFIG_SOC_SERIES_NRF54LX) || \
-	defined(CONFIG_SOC_SERIES_NRF54LM20)
-	/* Enable the MPSL IRQs only for the lifetime of a session. */
-	irq_enable(RADIO_0_IRQn);
-	irq_enable(TIMER10_IRQn);
-	irq_enable(GRTC_3_IRQn);
-	irq_enable(SWI00_IRQn);
-#elif defined(CONFIG_SOC_SERIES_NRF52) || defined(CONFIG_SOC_SERIES_NRF52X)
-	irq_enable(RADIO_IRQn);
-	irq_enable(TIMER0_IRQn);
-	irq_enable(RTC0_IRQn);
-	irq_enable(SWI0_EGU0_IRQn);
-#else
-#error "runtime-ble: unsupported SoC. Add the MPSL/SDC IRQ wiring for your chip."
-#endif
+	k_sem_reset(&runtime_load_sem);
+	ble_irqs_set(true);
 
 	k_thread_create(&runtime_thread, runtime_stack, RUNTIME_BLE_STACK_SIZE,
 			runtime_entry, NULL, NULL, NULL,
 			K_PRIO_PREEMPT(RUNTIME_BLE_THREAD_PRIO), 0, K_NO_WAIT);
+
+	/* Wait for the runtime thread to finish bring-up and publish its result, so
+	 * the caller gets an accurate status (RUNTIME_BLE_ERR_MPSL/_SDC/_TIMEOUT). */
+	int status = RUNTIME_BLE_ERR_TIMEOUT;
+
+	if (k_sem_take(&runtime_load_sem, K_MSEC(3000)) == 0) {
+		status = runtime_ble_load_status();
+	}
+	if (status != RUNTIME_BLE_OK) {
+		printk("[runtime-ble] load failed (status %d)\n", status);
+		runtime_ble_signal_unload();
+		runtime_ble_wake();
+		k_thread_join(&runtime_thread, K_MSEC(1000));
+		ble_irqs_set(false);
+		k_thread_stack_free(runtime_stack);
+		runtime_stack = NULL;
+		return status;
+	}
 	runtime_loaded = true;
 	return RUNTIME_BLE_OK;
 }
@@ -133,20 +165,7 @@ int runtime_ble_unload(void)
 	runtime_ble_signal_unload();
 	runtime_ble_wake(); /* unblock block_on so it re-polls and sees the unload */
 	k_thread_join(&runtime_thread, K_FOREVER);
-
-#if defined(CONFIG_SOC_SERIES_NRF54L) || defined(CONFIG_SOC_SERIES_NRF54LX) || \
-	defined(CONFIG_SOC_SERIES_NRF54LM20)
-	irq_disable(RADIO_0_IRQn);
-	irq_disable(TIMER10_IRQn);
-	irq_disable(GRTC_3_IRQn);
-	irq_disable(SWI00_IRQn);
-#elif defined(CONFIG_SOC_SERIES_NRF52) || defined(CONFIG_SOC_SERIES_NRF52X)
-	irq_disable(RADIO_IRQn);
-	irq_disable(TIMER0_IRQn);
-	irq_disable(RTC0_IRQn);
-	irq_disable(SWI0_EGU0_IRQn);
-#endif
-
+	ble_irqs_set(false);
 	k_thread_stack_free(runtime_stack);
 	runtime_stack = NULL;
 	runtime_loaded = false;
@@ -170,6 +189,7 @@ extern void runtime_irq_egu0_swi0(void);
 static int runtime_glue_init(void)
 {
 	k_sem_init(&runtime_sem, 0, 1);
+	k_sem_init(&runtime_load_sem, 0, 1);
 	k_timer_init(&runtime_timer, runtime_timer_cb, NULL);
 
 #if defined(CONFIG_SOC_SERIES_NRF54L) || defined(CONFIG_SOC_SERIES_NRF54LX) || \

@@ -20,7 +20,7 @@ extern crate alloc;
 
 use core::alloc::{GlobalAlloc, Layout};
 use core::ffi::{c_char, c_int, c_void};
-use core::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicI32, AtomicU32, AtomicUsize, Ordering};
 
 // ---- Zephyr-provided externs (resolved when linked into the Zephyr image) ----
 extern "C" {
@@ -534,9 +534,27 @@ pub(crate) static BOND_CMD: AtomicU32 = AtomicU32::new(BCMD_NONE);
 pub(crate) static BOND_INDEX: AtomicUsize = AtomicUsize::new(0);
 pub(crate) static BOND_IO_CAPABILITY: AtomicUsize = AtomicUsize::new(0);
 
-const RUNTIME_BLE_OK: c_int = 0;
-const RUNTIME_BLE_ERR_INVALID: c_int = -1;
+pub(crate) const RUNTIME_BLE_OK: c_int = 0;
+pub(crate) const RUNTIME_BLE_ERR_INVALID: c_int = -1;
 const RUNTIME_BLE_ERR_NO_MEM: c_int = -2;
+// Detailed load-failure codes (must match runtime_ble.h). Set by the runtime
+// thread during bring-up and returned by runtime_ble_load() / _load_status().
+pub(crate) const RUNTIME_BLE_ERR_MPSL: c_int = -3;
+pub(crate) const RUNTIME_BLE_ERR_SDC: c_int = -4;
+const RUNTIME_BLE_ERR_TIMEOUT: c_int = -5;
+/// Sentinel: bring-up not finished yet. Set before the runtime thread starts.
+pub(crate) const RUNTIME_BLE_LOAD_PENDING: c_int = 1;
+
+/// Bring-up result, published by the runtime thread and read by glue's
+/// runtime_ble_load() once it is signalled (via runtime_ble_load_done()).
+pub(crate) static LOAD_STATUS: AtomicI32 = AtomicI32::new(RUNTIME_BLE_LOAD_PENDING);
+
+/// Read the last/most-recent load result: RUNTIME_BLE_OK, a negative
+/// RUNTIME_BLE_ERR_*, or RUNTIME_BLE_LOAD_PENDING while a load is in progress.
+#[no_mangle]
+pub extern "C" fn runtime_ble_load_status() -> c_int {
+    LOAD_STATUS.load(Ordering::Acquire)
+}
 
 // Bits for RuntimeBleConfig.sdc_disable (must match runtime_ble.h). Drop optional
 // SoftDevice Controller features the app does not use. Consumed in chip::build_sdc.

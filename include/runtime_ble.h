@@ -42,6 +42,11 @@ extern "C" {
 #define RUNTIME_BLE_OK           0
 #define RUNTIME_BLE_ERR_INVALID -1
 #define RUNTIME_BLE_ERR_NO_MEM  -2
+/* Detailed runtime_ble_load() failures (also reported by runtime_ble_load_status). */
+#define RUNTIME_BLE_ERR_MPSL    -3  /* MPSL (radio timeslot layer) init failed */
+#define RUNTIME_BLE_ERR_SDC     -4  /* SoftDevice Controller init failed (check heap/pool) */
+#define RUNTIME_BLE_ERR_TIMEOUT -5  /* bring-up did not complete within the load timeout */
+#define RUNTIME_BLE_LOAD_PENDING 1  /* runtime_ble_load_status(): a load is in progress */
 
 /* ---- Role (config.role) ---- */
 #define RUNTIME_BLE_ROLE_PERIPHERAL 0   /* advertise + GATT server (default)  */
@@ -459,8 +464,15 @@ typedef struct {
 int runtime_ble_init(const runtime_ble_config_t *cfg);
 
 /* Bring BLE up: allocate a thread stack + session state from the heap and start
- * advertising. Idempotent. */
+ * advertising. Blocks until bring-up completes (or a ~3 s timeout) and returns the
+ * result: RUNTIME_BLE_OK, or RUNTIME_BLE_ERR_NO_MEM (stack alloc) /
+ * RUNTIME_BLE_ERR_MPSL / RUNTIME_BLE_ERR_SDC (e.g. heap/pool too small) /
+ * RUNTIME_BLE_ERR_TIMEOUT. On failure the partial session is torn down. Idempotent. */
 int runtime_ble_load(void);
+
+/* The most recent runtime_ble_load() result, or RUNTIME_BLE_LOAD_PENDING while a
+ * load is still in progress. Useful for logging/telemetry after load(). */
+int runtime_ble_load_status(void);
 
 /* Tear BLE down: signal teardown, join the thread, free its stack and session
  * state — all BLE RAM returns to the Zephyr heap. Idempotent. */

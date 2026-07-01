@@ -190,9 +190,13 @@ fn log_required_mem(cfg: &RuntimeCfg, req: Result<usize, nrf_sdc::Error>, pool: 
 /// One load->unload session. Allocates MPSL/SDC/host resources on the heap,
 /// runs until unload, then frees everything.
 pub(crate) fn run(cfg: Option<&'static RuntimeCfg>, _mode: c_int) {
+    super::signal_load_pending();
     let cfg: &'static RuntimeCfg = match cfg {
         Some(c) => c,
-        None => return,
+        None => {
+            super::signal_load_done(crate::RUNTIME_BLE_ERR_INVALID);
+            return;
+        }
     };
     // Zephyr already configured clocks/regulators; steal the peripherals.
     let p = unsafe { embassy_nrf::Peripherals::steal() };
@@ -222,6 +226,7 @@ pub(crate) fn run(cfg: Option<&'static RuntimeCfg>, _mode: c_int) {
         Ok(m) => Box::into_raw(Box::new(m)),
         Err(_) => {
             log(cfg, c"[runtime-ble] MPSL init failed; aborting load");
+            super::signal_load_done(crate::RUNTIME_BLE_ERR_MPSL);
             return;
         }
     };
@@ -261,6 +266,7 @@ pub(crate) fn run(cfg: Option<&'static RuntimeCfg>, _mode: c_int) {
                 let _ = Box::from_raw(rng_ptr);
                 let _ = Box::from_raw(mpsl_ptr);
             }
+            super::signal_load_done(crate::RUNTIME_BLE_ERR_SDC);
             return;
         }
     };
@@ -278,6 +284,7 @@ pub(crate) fn run(cfg: Option<&'static RuntimeCfg>, _mode: c_int) {
     let stack = builder.build();
 
     log(cfg, c"[runtime-ble] loaded on heap");
+    super::signal_load_done(crate::RUNTIME_BLE_OK);
     #[cfg(feature = "central")]
     if cfg.role == 1 {
         serve_central(mpsl, &stack, cfg);
