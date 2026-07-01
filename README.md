@@ -222,7 +222,7 @@ call list and config fields.
 - **Dual role** — server *and* client at once with
   `role = RUNTIME_BLE_ROLE_DUAL`. See [`examples/dual/`](examples/dual/).
 - **L2CAP CoC** — connection-oriented channels with `CONFIG_RUNTIME_BLE_L2CAP=y`
-  and `config.l2cap_psm`. See [`examples/l2cap_peripheral/`](examples/l2cap_peripheral/).
+  and `config.l2cap.psm`. See [`examples/l2cap_peripheral/`](examples/l2cap_peripheral/).
 
 The role and L2CAP are feature-gated into separate prebuilt libs, so a
 peripheral-only app stays on the lean default `libruntime_ble.a` (see

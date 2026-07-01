@@ -44,13 +44,17 @@ int main(void)
 	static const runtime_ble_config_t cfg = {
 		.abi_version = RUNTIME_BLE_ABI_VERSION,
 		.device_name = "RTBLE-L2CAP",
-		.manufacturer_id = 0xFFFF,
-		.l2cap_psm = L2CAP_PSM,
-		.l2cap_mtu = 128,
-		.l2cap_mps = 64,
-		.l2cap_initial_credits = 4,
-		.l2cap_credit_policy = RUNTIME_BLE_L2CAP_CREDITS_EVERY,
-		.l2cap_credit_policy_value = 2,
+		.adv = {
+			.manufacturer_id = 0xFFFF,
+		},
+		.l2cap = {
+			.psm = L2CAP_PSM,
+			.mtu = 128,
+			.mps = 64,
+			.initial_credits = 4,
+			.credit_policy = RUNTIME_BLE_L2CAP_CREDITS_EVERY,
+			.credit_policy_value = 2,
+		},
 		.callbacks = {
 			.on_l2cap_connected = on_l2cap_connected,
 			.on_l2cap_disconnected = on_l2cap_disconnected,

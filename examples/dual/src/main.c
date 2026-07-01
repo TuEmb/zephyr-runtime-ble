@@ -100,10 +100,14 @@ int main(void)
 	static const runtime_ble_config_t cfg = {
 		.abi_version = RUNTIME_BLE_ABI_VERSION,
 		.device_name = "RTBLE-DUAL",
-		.manufacturer_id = 0xFFFF,
 		.role = RUNTIME_BLE_ROLE_DUAL,
-		.peer_address = peer,
-		.peer_address_kind = RUNTIME_BLE_ADDR_RANDOM,
+		.adv = {
+			.manufacturer_id = 0xFFFF,
+		},
+		.central = {
+			.peer_address = peer,
+			.peer_address_kind = RUNTIME_BLE_ADDR_RANDOM,
+		},
 		.services = my_services,
 		.num_services = 1,
 		.callbacks = {

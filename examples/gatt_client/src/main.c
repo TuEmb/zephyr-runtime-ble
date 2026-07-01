@@ -170,9 +170,11 @@ int main(void)
 		.abi_version = RUNTIME_BLE_ABI_VERSION,
 		.device_name = "RTBLE-CENTRAL",
 		.role = RUNTIME_BLE_ROLE_CENTRAL,
-		.central_conn_min_interval_ms = 50,
-		.central_conn_max_interval_ms = 90,
-		.central_conn_timeout_ms = 8000,
+		.central = {
+			.conn_min_interval_ms = 50,
+			.conn_max_interval_ms = 90,
+			.conn_timeout_ms = 8000,
+		},
 		.callbacks = {
 			.on_connected = on_connected,
 			.on_disconnected = on_disconnected,

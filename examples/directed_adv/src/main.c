@@ -34,11 +34,13 @@ int main(void)
 	static const runtime_ble_config_t cfg = {
 		.abi_version = RUNTIME_BLE_ABI_VERSION,
 		.device_name = "RTBLE-DIRECTED",
-		.directed_peer_address = peer_addr,
-		.directed_peer_address_kind = RUNTIME_BLE_ADDR_RANDOM,
-		.directed_high_duty = 0,
-		.adv_interval_min_ms = 100,
-		.adv_interval_max_ms = 150,
+		.adv = {
+			.directed_peer_address = peer_addr,
+			.directed_peer_address_kind = RUNTIME_BLE_ADDR_RANDOM,
+			.directed_high_duty = 0,
+			.interval_min_ms = 100,
+			.interval_max_ms = 150,
+		},
 		.callbacks = {
 			.on_connected = on_connected,
 			.on_disconnected = on_disconnected,

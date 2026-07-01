@@ -368,50 +368,90 @@ typedef struct {
  * NULL/0 a built-in Nordic UART Service is used (RX 6e400002 write, TX 6e400003
  * notify — see `on_data` + `runtime_ble_send`).
  */
+/* Advertising / GAP settings (config.adv). A zeroed struct = connectable,
+ * general-discoverable, 30-60 ms, legacy 1M. */
+typedef struct {
+	const uint8_t          *data;                 /* raw AD structures; NULL -> build from fields */
+	uint8_t                 data_len;             /* raw advertising data length, <=31 */
+	uint16_t                manufacturer_id;      /* company ID for the manufacturer AD   */
+	const uint8_t          *manufacturer_data;    /* bytes after company ID; NULL -> none */
+	uint16_t                manufacturer_data_len;
+	const uint8_t          *service_uuid;         /* optional 2- or 16-byte UUID in AD */
+	uint8_t                 service_uuid_len;      /* 0, 2, or 16 */
+	const uint8_t          *service_data_uuid;    /* optional 2- or 16-byte UUID for Service Data */
+	uint8_t                 service_data_uuid_len; /* 0, 2, or 16 */
+	const uint8_t          *service_data;         /* bytes after service-data UUID; NULL -> none */
+	uint8_t                 service_data_len;
+	uint16_t                appearance;           /* GAP Appearance; 0 -> default generic power device */
+	uint8_t                 appearance_present;   /* 1 -> include Appearance AD (type 0x19) */
+	int8_t                  tx_power_dbm;          /* TX Power Level value; used when present=1 */
+	uint8_t                 tx_power_present;      /* 1 -> set adv tx power + include AD type 0x0a */
+	const uint8_t          *scan_response_data;   /* raw AD structures, <=31 bytes */
+	uint8_t                 scan_response_data_len;
+	uint8_t                 nonconnectable;       /* 1 -> beacon/broadcast only */
+	uint16_t                interval_min_ms;      /* 0 -> 30 ms */
+	uint16_t                interval_max_ms;      /* 0 -> 60 ms */
+	uint8_t                 channel_map;          /* RUNTIME_BLE_ADV_CH_*; 0 -> all channels */
+	uint8_t                 filter_policy;        /* RUNTIME_BLE_ADV_FILTER_* */
+	const uint8_t          *accept_address;       /* optional 6-byte accept-list peer */
+	uint8_t                 accept_address_kind;  /* RUNTIME_BLE_ADDR_* */
+	uint8_t                 discoverable;         /* 0 general (default), 1 limited, 2 none */
+	const uint8_t          *directed_peer_address;/* optional 6-byte peer for directed adv */
+	uint8_t                 directed_peer_address_kind; /* RUNTIME_BLE_ADDR_* */
+	uint8_t                 directed_high_duty;   /* 1 -> high-duty directed advertising */
+	uint8_t                 extended;             /* RUNTIME_BLE_ADV_EXT_*; 0 -> legacy */
+	uint8_t                 primary_phy;          /* RUNTIME_BLE_PHY_*; 0 -> 1M */
+	uint8_t                 secondary_phy;        /* RUNTIME_BLE_PHY_*; 0 -> primary PHY */
+	uint8_t                 periodic;             /* RUNTIME_BLE_PERIODIC_ADV_* */
+	uint16_t                periodic_interval_min_ms; /* 0 -> 100 ms */
+	uint16_t                periodic_interval_max_ms; /* 0 -> 250 ms */
+	const uint8_t          *periodic_data;        /* periodic AD structures, <=255 bytes */
+	uint8_t                 periodic_data_len;
+	uint8_t                 periodic_include_tx_power;
+} runtime_ble_adv_t;
+
+/* Central-role settings (config.central); used when role != peripheral. */
+typedef struct {
+	const uint8_t          *peer_address;         /* optional 6-byte peer (LSB first) to auto-connect */
+	uint8_t                 peer_address_kind;    /* RUNTIME_BLE_ADDR_* */
+	uint16_t                conn_min_interval_ms; /* 0 -> runtime default (80 ms) */
+	uint16_t                conn_max_interval_ms;
+	uint16_t                conn_latency;
+	uint16_t                conn_timeout_ms;      /* 0 -> 8 s */
+} runtime_ble_central_t;
+
+/* L2CAP connection-oriented channel settings (config.l2cap); needs a l2cap lib. */
+typedef struct {
+	uint16_t                psm;                  /* 0 = disabled */
+	uint16_t                mtu;                  /* SDU size; 0 -> default */
+	uint16_t                mps;                  /* per-credit frame size; 0 -> default */
+	uint16_t                initial_credits;      /* peer's starting send budget */
+	uint8_t                 credit_policy;        /* RUNTIME_BLE_L2CAP_CREDITS_* */
+	uint16_t                credit_policy_value;  /* N for CREDITS_EVERY / threshold; 0 -> 1 */
+} runtime_ble_l2cap_cfg_t;
+
+/* Security Manager settings (config.security). */
+typedef struct {
+	uint8_t                 bondable;             /* 1 -> pairing produces stored bond data */
+	uint8_t                 request_on_connect;   /* 1 -> request pairing/encryption on connect */
+	uint8_t                 oob_available;
+	uint8_t                 io_capability;        /* RUNTIME_BLE_IO_CAP_*; 0 -> no input/output */
+	uint8_t                 bond_slot_count;      /* 0 -> RUNTIME_BLE_BOND_SLOTS_DEFAULT */
+} runtime_ble_security_t;
+
 typedef struct {
 	/* MUST be set to RUNTIME_BLE_ABI_VERSION (guards against a header/lib
 	 * mismatch). runtime_ble_init() returns RUNTIME_BLE_ERR_ABI otherwise. */
 	uint32_t                abi_version;
-	const char             *device_name;          /* adv name; NULL -> "RUNTIME-BLE"      */
-	const uint8_t          *adv_data;             /* raw AD structures; NULL -> build from fields */
-	uint8_t                 adv_data_len;         /* raw advertising data length, <=31 */
-	uint16_t                manufacturer_id;      /* company ID for the manufacturer AD   */
-	const uint8_t          *manufacturer_data;    /* bytes after company ID; NULL -> none */
-	uint16_t                manufacturer_data_len;
-	const uint8_t          *adv_service_uuid;     /* optional 2- or 16-byte UUID in AD */
-	uint8_t                 adv_service_uuid_len; /* 0, 2, or 16 */
-	const uint8_t          *adv_service_data_uuid;/* optional 2- or 16-byte UUID for Service Data */
-	uint8_t                 adv_service_data_uuid_len; /* 0, 2, or 16 */
-	const uint8_t          *adv_service_data;     /* bytes after service-data UUID; NULL -> none */
-	uint8_t                 adv_service_data_len;
-	uint16_t                appearance;           /* GAP Appearance; 0 -> default generic power device */
-	uint8_t                 adv_appearance;       /* 1 -> include Appearance AD (type 0x19) */
-	int8_t                  adv_tx_power_dbm;     /* TX Power Level value; used when present=1 */
-	uint8_t                 adv_tx_power_present; /* 1 -> set adv tx power + include AD type 0x0a */
-	const uint8_t          *scan_response_data;   /* raw AD structures, <=31 bytes */
-	uint8_t                 scan_response_data_len;
-	uint8_t                 nonconnectable;       /* 1 -> beacon/broadcast only */
-	uint16_t                adv_interval_min_ms;  /* 0 -> 30 ms                            */
-	uint16_t                adv_interval_max_ms;  /* 0 -> 60 ms                            */
-	uint8_t                 adv_channel_map;      /* RUNTIME_BLE_ADV_CH_*; 0 -> all channels */
-	uint8_t                 adv_filter_policy;    /* RUNTIME_BLE_ADV_FILTER_* */
-	const uint8_t          *adv_accept_address;   /* optional 6-byte accept-list peer */
-	uint8_t                 adv_accept_address_kind; /* RUNTIME_BLE_ADDR_* */
-	uint8_t                 discoverable;         /* 0 general (default), 1 limited, 2 none */
-	const uint8_t          *address;              /* optional 6-byte static-random addr;   */
-	                                              /* NULL -> hwinfo-derived                */
-	const uint8_t          *directed_peer_address;/* optional 6-byte peer for directed adv */
-	uint8_t                 directed_peer_address_kind; /* RUNTIME_BLE_ADDR_* */
-	uint8_t                 directed_high_duty;   /* 1 -> high-duty directed advertising */
-	uint8_t                 adv_extended;         /* RUNTIME_BLE_ADV_EXT_*; 0 -> legacy */
-	uint8_t                 adv_primary_phy;      /* RUNTIME_BLE_PHY_*; 0 -> 1M */
-	uint8_t                 adv_secondary_phy;    /* RUNTIME_BLE_PHY_*; 0 -> primary PHY */
-	uint8_t                 periodic_adv;         /* RUNTIME_BLE_PERIODIC_ADV_* */
-	uint16_t                periodic_adv_interval_min_ms; /* 0 -> 100 ms */
-	uint16_t                periodic_adv_interval_max_ms; /* 0 -> 250 ms */
-	const uint8_t          *periodic_adv_data;    /* periodic AD structures, <=255 bytes */
-	uint8_t                 periodic_adv_data_len;
-	uint8_t                 periodic_adv_include_tx_power;
+	const char             *device_name;          /* adv name; NULL -> "RUNTIME-BLE" */
+	const uint8_t          *address;              /* optional 6-byte static-random addr; NULL -> hwinfo */
+	uint8_t                 role;                 /* RUNTIME_BLE_ROLE_* (0 peripheral, default) */
+
+	runtime_ble_adv_t       adv;                  /* advertising / GAP */
+	runtime_ble_central_t   central;             /* central role (role != peripheral) */
+	runtime_ble_l2cap_cfg_t l2cap;               /* L2CAP CoC */
+	runtime_ble_security_t  security;            /* Security Manager / bonding */
+
 	/* User-defined GATT. NULL/0 -> built-in NUS. Otherwise built at load time;
 	 * use on_write + runtime_ble_notify() with the flat characteristic index.
 	 * The service/characteristic/descriptor arrays and their uuid/value buffers
@@ -419,52 +459,15 @@ typedef struct {
 	const runtime_ble_service_def_t *services;
 	uint8_t                          num_services;
 
-	/* ---- Role ---- */
-	uint8_t                 role;                 /* RUNTIME_BLE_ROLE_* (0 peripheral, default) */
-	/* Central only: optional 6-byte peer (LSB first) to auto-connect on load;
-	 * NULL -> none (use runtime_ble_scan_start + runtime_ble_connect). Address
-	 * kind is RUNTIME_BLE_ADDR_*; zero/default keeps the historic random type. */
-	const uint8_t          *peer_address;
-	uint8_t                 peer_address_kind;
-	/* Central only: initial connection parameters used by connect/create-connection.
-	 * Zero values keep the runtime defaults (80 ms interval, latency 0, 8 s timeout). */
-	uint16_t                central_conn_min_interval_ms;
-	uint16_t                central_conn_max_interval_ms;
-	uint16_t                central_conn_latency;
-	uint16_t                central_conn_timeout_ms;
-	/* L2CAP connection-oriented channel PSM (0 = disabled). Once connected, a
-	 * peripheral listens on it and a central opens it. Needs a l2cap-capable
-	 * lib (CONFIG_RUNTIME_BLE_L2CAP=y). */
-	uint16_t                l2cap_psm;
-	/* Optional L2CAP CoC tuning. Zero keeps the runtime defaults. MTU is the
-	 * SDU size, MPS is the per-credit frame size, initial_credits is the peer's
-	 * starting send budget. credit_policy_value is N for CREDITS_EVERY and the
-	 * low-credit threshold for CREDITS_MIN_THRESHOLD; zero maps to 1. */
-	uint16_t                l2cap_mtu;
-	uint16_t                l2cap_mps;
-	uint16_t                l2cap_initial_credits;
-	uint8_t                 l2cap_credit_policy; /* RUNTIME_BLE_L2CAP_CREDITS_* */
-	uint16_t                l2cap_credit_policy_value;
-	/* Security Manager. `security_bondable` lets pairing produce bond data
-	 * inside the runtime; `security_request_on_connect` requests pairing or
-	 * encryption immediately after a link connects. */
-	uint8_t                 security_bondable;
-	uint8_t                 security_request_on_connect;
-	uint8_t                 security_oob_available;
-	uint8_t                 security_io_capability; /* RUNTIME_BLE_IO_CAP_*; 0 -> no input/output */
-	uint8_t                 bond_slot_count;      /* 0 -> RUNTIME_BLE_BOND_SLOTS_DEFAULT */
-
 	/* Trim optional SoftDevice Controller features this app does not use, to lower
-	 * the controller's runtime footprint. Bitmask of RUNTIME_BLE_SDC_DISABLE_*;
-	 * 0 (default) keeps the full feature set. A feature the app actually uses is
-	 * kept regardless (e.g. extended/periodic advertising forces ext-adv on).
-	 * NOTE: the controller memory pool is reserved at a fixed size, so this mainly
-	 * trims the active feature set; for true RAM/flash savings build the lean
-	 * library variant (CONFIG_RUNTIME_BLE_LEAN). */
+	 * the controller's runtime footprint (bitmask of RUNTIME_BLE_SDC_DISABLE_*;
+	 * 0 keeps the build's full set). Trims the active feature set only — for true
+	 * RAM/flash savings the default build is already minimum; CONFIG_RUNTIME_BLE_PERF
+	 * selects the larger full-featured build. */
 	uint32_t                sdc_disable;
 
 	runtime_ble_callbacks_t callbacks;
-	void                   *user;                 /* opaque, passed back to callbacks      */
+	void                   *user;                 /* opaque, passed back to callbacks */
 } runtime_ble_config_t;
 
 /* ---- Public API ---- */

@@ -44,18 +44,25 @@ static const runtime_ble_service_def_t svcs[] = {
 };
 static const uint8_t svc_data_uuid[2] = { 0xF0, 0xFE }, svc_data[] = { 0x01, 0x64 };
 static const runtime_ble_config_t cfg = {
-    .device_name = "RUNTIME-BLE", .manufacturer_id = 0xFFFF,
-    .adv_service_uuid = svc_uuid, .adv_service_uuid_len = 16,
-    .adv_service_data_uuid = svc_data_uuid, .adv_service_data_uuid_len = 2,
-    .adv_service_data = svc_data, .adv_service_data_len = sizeof(svc_data),
-    .appearance = 0x0540, .adv_appearance = 1,          /* Generic sensor */
-    .adv_tx_power_dbm = 0, .adv_tx_power_present = 1,   /* AD type 0x0a + controller hint */
-    /* .nonconnectable = 1, for beacon/broadcast-only advertising */
-    /* .directed_peer_address = peer, for directed reconnect advertising */
-    .adv_interval_min_ms = 30, .adv_interval_max_ms = 60,
-    .adv_channel_map = RUNTIME_BLE_ADV_CH_ALL,           /* 0 also means all */
-    /* .adv_filter_policy = RUNTIME_BLE_ADV_FILTER_CONN, .adv_accept_address = peer, */
-    .discoverable = 0,                                   /* 0 general, 1 limited, 2 none */
+    .abi_version = RUNTIME_BLE_ABI_VERSION,             /* required: header/lib guard */
+    .device_name = "RUNTIME-BLE",
+    .adv = {                                            /* advertising / GAP group */
+        .manufacturer_id = 0xFFFF,
+        .service_uuid = svc_uuid, .service_uuid_len = 16,
+        .service_data_uuid = svc_data_uuid, .service_data_uuid_len = 2,
+        .service_data = svc_data, .service_data_len = sizeof(svc_data),
+        .appearance = 0x0540, .appearance_present = 1,  /* Generic sensor */
+        .tx_power_dbm = 0, .tx_power_present = 1,       /* AD type 0x0a + controller hint */
+        /* .nonconnectable = 1, for beacon/broadcast-only advertising */
+        /* .directed_peer_address = peer, for directed reconnect advertising */
+        .interval_min_ms = 30, .interval_max_ms = 60,
+        .channel_map = RUNTIME_BLE_ADV_CH_ALL,          /* 0 also means all */
+        /* .filter_policy = RUNTIME_BLE_ADV_FILTER_CONN, .accept_address = peer, */
+        .discoverable = 0,                              /* 0 general, 1 limited, 2 none */
+    },
+    /* .central = { .peer_address = ..., .conn_timeout_ms = 8000 },  role != peripheral */
+    /* .l2cap   = { .psm = 0x0080, .mtu = 128 },                     CoC (needs l2cap lib) */
+    /* .security = { .bondable = 1, .io_capability = ... },          Security Manager */
     .services = svcs, .num_services = 1,
     .callbacks = { .on_write = on_write, .on_connected = on_conn, ... },
 };
@@ -76,13 +83,14 @@ runtime_ble_unload();            // tear down, free session RAM
 
 ## Advertising / GAP
 
-For fully custom beacons, set `adv_data`/`adv_data_len` to raw AD structures
-(up to 31 bytes); when present it bypasses the automatic advertising builder.
-For fast reconnect to a known central, set `directed_peer_address`,
-`directed_peer_address_kind`, and optionally `directed_high_duty`; directed
-legacy advertising is connectable, non-scannable, and carries no AD payload.
-Set `adv_channel_map` with `RUNTIME_BLE_ADV_CH_37/38/39` bits to restrict the
-legacy advertising channels; zero uses all three channels.
+All advertising/GAP fields live in the `config.adv` sub-struct. For fully custom
+beacons, set `adv.data`/`adv.data_len` to raw AD structures (up to 31 bytes);
+when present it bypasses the automatic advertising builder. For fast reconnect to
+a known central, set `adv.directed_peer_address`, `adv.directed_peer_address_kind`,
+and optionally `adv.directed_high_duty`; directed legacy advertising is
+connectable, non-scannable, and carries no AD payload. Set `adv.channel_map` with
+`RUNTIME_BLE_ADV_CH_37/38/39` bits to restrict the legacy advertising channels;
+zero uses all three channels.
 
 ## Characteristics, descriptors, callbacks
 
@@ -134,11 +142,11 @@ Set `runtime_ble_char_def_t.permissions` with `RUNTIME_BLE_PERM_READ_*`,
 `RUNTIME_BLE_PERM_WRITE_*`, or `RUNTIME_BLE_PERM_CCCD_*` to require encrypted or
 authenticated links for individual ATT operations.
 
-For persistent bonding, set `security_bondable = 1` and implement
+For persistent bonding, set `security.bondable = 1` and implement
 `on_bond_load(index, out, max, user)` / `on_bond_store(index, blob, len, user)`.
 Store the opaque `RUNTIME_BLE_BOND_BLOB_MAX` bytes in flash/settings as-is; the
 runtime restores them into the BLE stack on the next `runtime_ble_load()`.
-Use `security_io_capability` or `runtime_ble_set_io_capability()` with
+Use `security.io_capability` or `runtime_ble_set_io_capability()` with
 `RUNTIME_BLE_IO_CAP_*` when pairing should use display, keyboard, or numeric
 comparison instead of the default no-input/no-output capability. Use
 `runtime_ble_bond_enumerate()` to receive restored/runtime bonds via `on_bond`,
@@ -170,7 +178,7 @@ runtime_ble_scan_start_ex(1, 100, 50, 0,
                           NULL, 0);    // scan with controller duplicate filtering
 runtime_ble_scan_stop();
 runtime_ble_connect_addr(addr, RUNTIME_BLE_ADDR_RANDOM);
-                                        // or config.peer_address to auto-connect
+                                        // or config.central.peer_address to auto-connect
 runtime_ble_client_discover_services(); // -> on_service(start, end, uuid, …)
 runtime_ble_client_discover_all();      // -> on_service(...), on_discovered(...)
 runtime_ble_client_discover(svc, 16);   // -> on_discovered(handle, …)
@@ -191,12 +199,12 @@ runtime_ble_client_write_descriptor(desc_handle, buf, n);
                                         // long reads from an ATT offset
 ```
 
-Set `central_conn_min_interval_ms`, `central_conn_max_interval_ms`,
-`central_conn_latency`, and `central_conn_timeout_ms` to tune the initial LE
+Set `central.conn_min_interval_ms`, `central.conn_max_interval_ms`,
+`central.conn_latency`, and `central.conn_timeout_ms` to tune the initial LE
 connection parameters used by the central create-connection procedure; zero
 values keep the runtime defaults.
 Use `on_scan_result_ext` when the central needs the peer's address type; pass
-that value to `runtime_ble_connect_addr()` or `config.peer_address_kind`.
+that value to `runtime_ble_connect_addr()` or `config.central.peer_address_kind`.
 Use `on_scan_result_meta` when the scanner also needs report metadata such as
 connectable/scannable, scan-response, legacy/extended, PHY, TX power, and SID.
 Use `runtime_ble_scan_start_ex()` to enable controller duplicate filtering,
@@ -229,13 +237,13 @@ only apps stay on the lean default lib (see [`rust/README.md`](rust/README.md)).
 
 `config.role = RUNTIME_BLE_ROLE_DUAL` makes a central-capable build act as a
 **GATT server *and* client simultaneously** (two links): it advertises + serves
-incoming centrals while also connecting to `peer_address` as a client. See
+incoming centrals while also connecting to `central.peer_address` as a client. See
 [`examples/dual/`](examples/dual/) (HW-verified: advertises `RTBLE-DUAL` while
 connected as a client).
 
 ## L2CAP CoC
 
-Build with `CONFIG_RUNTIME_BLE_L2CAP=y` and set `config.l2cap_psm`. Once
+Build with `CONFIG_RUNTIME_BLE_L2CAP=y` and set `config.l2cap.psm`. Once
 `on_l2cap_connected` fires, send SDUs with `runtime_ble_l2cap_send()` and close
 the channel with `runtime_ble_l2cap_disconnect()`; received SDUs arrive through
 `on_l2cap_data`. Optional CoC tuning is available through `config.l2cap_mtu`,

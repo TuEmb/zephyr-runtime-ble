@@ -215,19 +215,23 @@ int main(void)
 	static const runtime_ble_config_t cfg = {
 		.abi_version = RUNTIME_BLE_ABI_VERSION,
 		.device_name = "RUNTIME-BLE",
-		.adv_data = adv_data,
-		.adv_data_len = sizeof(adv_data),
-		.scan_response_data = scan_rsp,
-		.scan_response_data_len = sizeof(scan_rsp),
-		.adv_interval_min_ms = 30,
-		.adv_interval_max_ms = 60,
-		.discoverable = 0, /* general-discoverable */
 		.address = NULL,   /* hwinfo-derived static-random address */
+		.adv = {
+			.data = adv_data,
+			.data_len = sizeof(adv_data),
+			.scan_response_data = scan_rsp,
+			.scan_response_data_len = sizeof(scan_rsp),
+			.interval_min_ms = 30,
+			.interval_max_ms = 60,
+			.discoverable = 0, /* general-discoverable */
+		},
+		.security = {
+			.bondable = 1,
+			.io_capability = RUNTIME_BLE_IO_CAP_DISPLAY_YES_NO,
+			.bond_slot_count = 1,
+		},
 		.services = my_services,
 		.num_services = 1,
-		.security_bondable = 1,
-		.security_io_capability = RUNTIME_BLE_IO_CAP_DISPLAY_YES_NO,
-		.bond_slot_count = 1,
 		/* This legacy 1M/2M connectable peripheral never uses the Coded PHY or
 		 * connection subrating; trim them from the controller's feature set. */
 		.sdc_disable = RUNTIME_BLE_SDC_DISABLE_CODED_PHY |

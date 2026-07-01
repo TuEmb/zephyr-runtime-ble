@@ -283,81 +283,101 @@ pub struct RuntimeBleServiceDef {
 /// gives a sensible default (connectable, general-discoverable, 30-60 ms, name
 /// "RUNTIME-BLE", random-static address from hwinfo). Pointed-to data (name,
 /// manufacturer_data, service data, address) must outlive the session — use static storage.
+/// C ABI: advertising / GAP settings (must match runtime_ble_adv_t).
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct RuntimeBleAdv {
+    pub data: *const u8,
+    pub data_len: u8,
+    pub manufacturer_id: u16,
+    pub manufacturer_data: *const u8,
+    pub manufacturer_data_len: u16,
+    pub service_uuid: *const u8,
+    pub service_uuid_len: u8,
+    pub service_data_uuid: *const u8,
+    pub service_data_uuid_len: u8,
+    pub service_data: *const u8,
+    pub service_data_len: u8,
+    pub appearance: u16,
+    pub appearance_present: u8,
+    pub tx_power_dbm: i8,
+    pub tx_power_present: u8,
+    pub scan_response_data: *const u8,
+    pub scan_response_data_len: u8,
+    pub nonconnectable: u8,
+    pub interval_min_ms: u16,
+    pub interval_max_ms: u16,
+    pub channel_map: u8,
+    pub filter_policy: u8,
+    pub accept_address: *const u8,
+    pub accept_address_kind: u8,
+    pub discoverable: u8,
+    pub directed_peer_address: *const u8,
+    pub directed_peer_address_kind: u8,
+    pub directed_high_duty: u8,
+    pub extended: u8,
+    pub primary_phy: u8,
+    pub secondary_phy: u8,
+    pub periodic: u8,
+    pub periodic_interval_min_ms: u16,
+    pub periodic_interval_max_ms: u16,
+    pub periodic_data: *const u8,
+    pub periodic_data_len: u8,
+    pub periodic_include_tx_power: u8,
+}
+
+/// C ABI: central-role settings (must match runtime_ble_central_t).
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct RuntimeBleCentral {
+    pub peer_address: *const u8,
+    pub peer_address_kind: u8,
+    pub conn_min_interval_ms: u16,
+    pub conn_max_interval_ms: u16,
+    pub conn_latency: u16,
+    pub conn_timeout_ms: u16,
+}
+
+/// C ABI: L2CAP CoC settings (must match runtime_ble_l2cap_cfg_t).
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct RuntimeBleL2cap {
+    pub psm: u16,
+    pub mtu: u16,
+    pub mps: u16,
+    pub initial_credits: u16,
+    pub credit_policy: u8,
+    pub credit_policy_value: u16,
+}
+
+/// C ABI: Security Manager settings (must match runtime_ble_security_t).
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct RuntimeBleSecurity {
+    pub bondable: u8,
+    pub request_on_connect: u8,
+    pub oob_available: u8,
+    pub io_capability: u8,
+    pub bond_slot_count: u8,
+}
+
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct RuntimeBleConfig {
     /// Must equal RUNTIME_BLE_ABI_VERSION; guards against a header/lib mismatch.
     pub abi_version: u32,
     pub device_name: *const c_char,
-    pub adv_data: *const u8,
-    pub adv_data_len: u8,
-    /// Company identifier for the manufacturer-specific AD (e.g. 0xFFFF).
-    pub manufacturer_id: u16,
-    /// Bytes after the company id in the manufacturer-specific AD (or null).
-    pub manufacturer_data: *const u8,
-    pub manufacturer_data_len: u16,
-    pub adv_service_uuid: *const u8,
-    pub adv_service_uuid_len: u8,
-    pub adv_service_data_uuid: *const u8,
-    pub adv_service_data_uuid_len: u8,
-    pub adv_service_data: *const u8,
-    pub adv_service_data_len: u8,
-    pub appearance: u16,
-    pub adv_appearance: u8,
-    pub adv_tx_power_dbm: i8,
-    pub adv_tx_power_present: u8,
-    pub scan_response_data: *const u8,
-    pub scan_response_data_len: u8,
-    /// 1 = non-connectable advertising/beacon; 0 = connectable GATT server.
-    pub nonconnectable: u8,
-    /// Advertising interval window in milliseconds (0 -> 30 / 60 default).
-    pub adv_interval_min_ms: u16,
-    pub adv_interval_max_ms: u16,
-    /// Advertising channel map bits: bit0=37, bit1=38, bit2=39; 0 -> all.
-    pub adv_channel_map: u8,
-    pub adv_filter_policy: u8,
-    pub adv_accept_address: *const u8,
-    pub adv_accept_address_kind: u8,
-    /// 0 = general discoverable (default), 1 = limited, 2 = non-discoverable.
-    pub discoverable: u8,
     /// Optional custom 6-byte static-random address; null -> hwinfo-derived.
     pub address: *const u8,
-    /// Peripheral only: optional directed advertising peer address.
-    pub directed_peer_address: *const u8,
-    pub directed_peer_address_kind: u8,
-    pub directed_high_duty: u8,
-    pub adv_extended: u8,
-    pub adv_primary_phy: u8,
-    pub adv_secondary_phy: u8,
-    pub periodic_adv: u8,
-    pub periodic_adv_interval_min_ms: u16,
-    pub periodic_adv_interval_max_ms: u16,
-    pub periodic_adv_data: *const u8,
-    pub periodic_adv_data_len: u8,
-    pub periodic_adv_include_tx_power: u8,
+    /// Role: 0 = peripheral (default), 1 = central. See RUNTIME_BLE_ROLE_*.
+    pub role: u8,
+    pub adv: RuntimeBleAdv,
+    pub central: RuntimeBleCentral,
+    pub l2cap: RuntimeBleL2cap,
+    pub security: RuntimeBleSecurity,
     /// User-defined GATT (null/0 -> built-in NUS). Built at load time.
     pub services: *const RuntimeBleServiceDef,
     pub num_services: u8,
-    /// Role: 0 = peripheral (default), 1 = central. See RUNTIME_BLE_ROLE_*.
-    pub role: u8,
-    /// Central only: optional 6-byte peer to auto-connect on load (null -> none).
-    pub peer_address: *const u8,
-    pub peer_address_kind: u8,
-    pub central_conn_min_interval_ms: u16,
-    pub central_conn_max_interval_ms: u16,
-    pub central_conn_latency: u16,
-    pub central_conn_timeout_ms: u16,
-    pub l2cap_psm: u16,
-    pub l2cap_mtu: u16,
-    pub l2cap_mps: u16,
-    pub l2cap_initial_credits: u16,
-    pub l2cap_credit_policy: u8,
-    pub l2cap_credit_policy_value: u16,
-    pub security_bondable: u8,
-    pub security_request_on_connect: u8,
-    pub security_oob_available: u8,
-    pub security_io_capability: u8,
-    pub bond_slot_count: u8,
     pub sdc_disable: u32,
     pub callbacks: RuntimeBleCallbacks,
     pub user: *mut c_void,
@@ -582,80 +602,83 @@ pub extern "C" fn runtime_ble_init(cfg: *const RuntimeBleConfig) -> c_int {
     if c.abi_version != RUNTIME_BLE_ABI_VERSION {
         return RUNTIME_BLE_ERR_ABI;
     }
-    if c.l2cap_credit_policy > 1
-        || (c.l2cap_mtu != 0 && c.l2cap_mtu < 23)
-        || (c.l2cap_mps != 0 && c.l2cap_mps < 23)
-        || c.adv_filter_policy > 3
-        || c.adv_extended > 1
-        || c.adv_primary_phy > 3
-        || c.adv_secondary_phy > 3
-        || c.periodic_adv > 1
-        || (c.periodic_adv != 0 && (c.adv_extended == 0 || c.nonconnectable == 0))
-        || (c.adv_filter_policy != 0 && c.adv_accept_address.is_null())
+    let (adv, cen, l2, sec) = (&c.adv, &c.central, &c.l2cap, &c.security);
+    if l2.credit_policy > 1
+        || (l2.mtu != 0 && l2.mtu < 23)
+        || (l2.mps != 0 && l2.mps < 23)
+        || adv.filter_policy > 3
+        || adv.extended > 1
+        || adv.primary_phy > 3
+        || adv.secondary_phy > 3
+        || adv.periodic > 1
+        || (adv.periodic != 0 && (adv.extended == 0 || adv.nonconnectable == 0))
+        || (adv.filter_policy != 0 && adv.accept_address.is_null())
     {
         return RUNTIME_BLE_ERR_INVALID;
     }
+    // Flatten the grouped public config into the internal (flat) RuntimeCfg so the
+    // rest of the runtime is unchanged by the public struct's grouping.
     unsafe {
         CONFIG = Some(RuntimeCfg {
             device_name: c.device_name,
-            adv_data: c.adv_data,
-            adv_data_len: c.adv_data_len,
-            manufacturer_id: c.manufacturer_id,
-            manufacturer_data: c.manufacturer_data,
-            manufacturer_data_len: c.manufacturer_data_len,
-            adv_service_uuid: c.adv_service_uuid,
-            adv_service_uuid_len: c.adv_service_uuid_len,
-            adv_service_data_uuid: c.adv_service_data_uuid,
-            adv_service_data_uuid_len: c.adv_service_data_uuid_len,
-            adv_service_data: c.adv_service_data,
-            adv_service_data_len: c.adv_service_data_len,
-            appearance: c.appearance,
-            adv_appearance: c.adv_appearance,
-            adv_tx_power_dbm: c.adv_tx_power_dbm,
-            adv_tx_power_present: c.adv_tx_power_present,
-            scan_response_data: c.scan_response_data,
-            scan_response_data_len: c.scan_response_data_len,
-            nonconnectable: c.nonconnectable,
-            adv_interval_min_ms: c.adv_interval_min_ms,
-            adv_interval_max_ms: c.adv_interval_max_ms,
-            adv_channel_map: c.adv_channel_map,
-            adv_filter_policy: c.adv_filter_policy,
-            adv_accept_address: c.adv_accept_address,
-            adv_accept_address_kind: c.adv_accept_address_kind,
-            discoverable: c.discoverable,
+            adv_data: adv.data,
+            adv_data_len: adv.data_len,
+            manufacturer_id: adv.manufacturer_id,
+            manufacturer_data: adv.manufacturer_data,
+            manufacturer_data_len: adv.manufacturer_data_len,
+            adv_service_uuid: adv.service_uuid,
+            adv_service_uuid_len: adv.service_uuid_len,
+            adv_service_data_uuid: adv.service_data_uuid,
+            adv_service_data_uuid_len: adv.service_data_uuid_len,
+            adv_service_data: adv.service_data,
+            adv_service_data_len: adv.service_data_len,
+            appearance: adv.appearance,
+            adv_appearance: adv.appearance_present,
+            adv_tx_power_dbm: adv.tx_power_dbm,
+            adv_tx_power_present: adv.tx_power_present,
+            scan_response_data: adv.scan_response_data,
+            scan_response_data_len: adv.scan_response_data_len,
+            nonconnectable: adv.nonconnectable,
+            adv_interval_min_ms: adv.interval_min_ms,
+            adv_interval_max_ms: adv.interval_max_ms,
+            adv_channel_map: adv.channel_map,
+            adv_filter_policy: adv.filter_policy,
+            adv_accept_address: adv.accept_address,
+            adv_accept_address_kind: adv.accept_address_kind,
+            discoverable: adv.discoverable,
             address: c.address,
-            directed_peer_address: c.directed_peer_address,
-            directed_peer_address_kind: c.directed_peer_address_kind,
-            directed_high_duty: c.directed_high_duty,
-            adv_extended: c.adv_extended,
-            adv_primary_phy: c.adv_primary_phy,
-            adv_secondary_phy: c.adv_secondary_phy,
-            periodic_adv: c.periodic_adv,
-            periodic_adv_interval_min_ms: c.periodic_adv_interval_min_ms,
-            periodic_adv_interval_max_ms: c.periodic_adv_interval_max_ms,
-            periodic_adv_data: c.periodic_adv_data,
-            periodic_adv_data_len: c.periodic_adv_data_len,
-            periodic_adv_include_tx_power: c.periodic_adv_include_tx_power,
+            directed_peer_address: adv.directed_peer_address,
+            directed_peer_address_kind: adv.directed_peer_address_kind,
+            directed_high_duty: adv.directed_high_duty,
+            adv_extended: adv.extended,
+            adv_primary_phy: adv.primary_phy,
+            adv_secondary_phy: adv.secondary_phy,
+            periodic_adv: adv.periodic,
+            periodic_adv_interval_min_ms: adv.periodic_interval_min_ms,
+            periodic_adv_interval_max_ms: adv.periodic_interval_max_ms,
+            periodic_adv_data: adv.periodic_data,
+            periodic_adv_data_len: adv.periodic_data_len,
+            periodic_adv_include_tx_power: adv.periodic_include_tx_power,
             services: c.services,
             num_services: c.num_services,
             role: c.role,
-            peer_address: c.peer_address,
-            peer_address_kind: c.peer_address_kind,
-            central_conn_min_interval_ms: c.central_conn_min_interval_ms,
-            central_conn_max_interval_ms: c.central_conn_max_interval_ms,
-            central_conn_latency: c.central_conn_latency,
-            central_conn_timeout_ms: c.central_conn_timeout_ms,
-            l2cap_psm: c.l2cap_psm,
-            l2cap_mtu: c.l2cap_mtu,
-            l2cap_mps: c.l2cap_mps,
-            l2cap_initial_credits: c.l2cap_initial_credits,
-            l2cap_credit_policy: c.l2cap_credit_policy,
-            l2cap_credit_policy_value: c.l2cap_credit_policy_value,
-            security_bondable: c.security_bondable,
-            security_request_on_connect: c.security_request_on_connect,
-            security_oob_available: c.security_oob_available,
-            security_io_capability: c.security_io_capability,
-            bond_slot_count: c.bond_slot_count,
+            peer_address: cen.peer_address,
+            peer_address_kind: cen.peer_address_kind,
+            central_conn_min_interval_ms: cen.conn_min_interval_ms,
+            central_conn_max_interval_ms: cen.conn_max_interval_ms,
+            central_conn_latency: cen.conn_latency,
+            central_conn_timeout_ms: cen.conn_timeout_ms,
+            l2cap_psm: l2.psm,
+            l2cap_mtu: l2.mtu,
+            l2cap_mps: l2.mps,
+            l2cap_initial_credits: l2.initial_credits,
+            l2cap_credit_policy: l2.credit_policy,
+            l2cap_credit_policy_value: l2.credit_policy_value,
+            security_bondable: sec.bondable,
+            security_request_on_connect: sec.request_on_connect,
+            security_oob_available: sec.oob_available,
+            security_io_capability: sec.io_capability,
+            bond_slot_count: sec.bond_slot_count,
             sdc_disable: c.sdc_disable,
             callbacks: c.callbacks,
             user: c.user,

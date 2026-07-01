@@ -124,17 +124,17 @@ ZTEST(runtime_ble_edge, test_l2cap_config_validation)
 {
 	runtime_ble_config_t cfg = *test_base_cfg();
 
-	cfg.l2cap_credit_policy = 2;
+	cfg.l2cap.credit_policy = 2;
 	zassert_equal(runtime_ble_init(&cfg), RUNTIME_BLE_ERR_INVALID,
 		      "unknown L2CAP credit policy must be rejected");
 
 	cfg = *test_base_cfg();
-	cfg.l2cap_mtu = 22;
+	cfg.l2cap.mtu = 22;
 	zassert_equal(runtime_ble_init(&cfg), RUNTIME_BLE_ERR_INVALID,
 		      "too-small L2CAP MTU must be rejected");
 
 	cfg = *test_base_cfg();
-	cfg.l2cap_mps = 22;
+	cfg.l2cap.mps = 22;
 	zassert_equal(runtime_ble_init(&cfg), RUNTIME_BLE_ERR_INVALID,
 		      "too-small L2CAP MPS must be rejected");
 
@@ -146,17 +146,17 @@ ZTEST(runtime_ble_edge, test_adv_filter_policy_validation)
 	static const uint8_t peer[6] = {0, 1, 2, 3, 4, 5};
 	runtime_ble_config_t cfg = *test_base_cfg();
 
-	cfg.adv_filter_policy = 4;
-	cfg.adv_accept_address = peer;
+	cfg.adv.filter_policy = 4;
+	cfg.adv.accept_address = peer;
 	zassert_equal(runtime_ble_init(&cfg), RUNTIME_BLE_ERR_INVALID,
 		      "unknown advertising filter policy must be rejected");
 
 	cfg = *test_base_cfg();
-	cfg.adv_filter_policy = RUNTIME_BLE_ADV_FILTER_CONN;
+	cfg.adv.filter_policy = RUNTIME_BLE_ADV_FILTER_CONN;
 	zassert_equal(runtime_ble_init(&cfg), RUNTIME_BLE_ERR_INVALID,
 		      "filter policy must require an accept-list address");
 
-	cfg.adv_accept_address = peer;
+	cfg.adv.accept_address = peer;
 	zassert_equal(runtime_ble_init(&cfg), RUNTIME_BLE_OK,
 		      "filter policy with an accept-list address should initialize");
 	zassert_equal(runtime_ble_init(test_base_cfg()), RUNTIME_BLE_OK, "restore base cfg failed");
@@ -227,8 +227,8 @@ ZTEST(runtime_ble_edge, test_oob_security_config_init)
 {
 	runtime_ble_config_t cfg = *test_base_cfg();
 
-	cfg.security_oob_available = 1;
-	cfg.security_request_on_connect = 1;
+	cfg.security.oob_available = 1;
+	cfg.security.request_on_connect = 1;
 	zassert_equal(runtime_ble_init(&cfg), RUNTIME_BLE_OK, "OOB security config init failed");
 	test_load_settled();
 	zassert_equal(runtime_ble_unload(), RUNTIME_BLE_OK, "cleanup unload failed");
@@ -283,7 +283,7 @@ ZTEST(runtime_ble_edge, test_gatt_permission_flags_init)
 
 	cfg.services = services;
 	cfg.num_services = 1;
-	cfg.security_bondable = 1;
+	cfg.security.bondable = 1;
 	zassert_equal(runtime_ble_init(&cfg), RUNTIME_BLE_OK, "permission config init failed");
 	test_load_settled();
 	zassert_equal(runtime_ble_unload(), RUNTIME_BLE_OK, "cleanup unload failed");
