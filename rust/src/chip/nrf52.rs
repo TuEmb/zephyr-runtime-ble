@@ -27,17 +27,18 @@ use crate::RuntimeCfg;
 const L2CAP_TXQ: u8 = 4;
 const L2CAP_RXQ: u8 = 4;
 
-// SoftDevice Controller memory pool; the central role needs more. The lean
-// variant drops ext/periodic/coded/subrating/frame-space, so it fits a smaller pool.
-// Lean feature set needs ~5.7 KB of controller memory (see nRF54L measurement +
-// the "[runtime-ble] sdc mem" log). nRF52 isn't on the test rig, so keep a wider
-// margin; trim further once verified on real nRF52 hardware.
-#[cfg(feature = "lean")]
-const SDC_MEM: usize = 7168;
-#[cfg(all(not(feature = "central"), not(feature = "lean")))]
-const SDC_MEM: usize = 16384;
-#[cfg(all(feature = "central", not(feature = "lean")))]
-const SDC_MEM: usize = 20480;
+// SoftDevice Controller memory pool, right-sized to the SDC `required_memory()`
+// (logged at load) per profile. Same feature set as nRF54L, so the needs match its
+// measurement; nRF52 isn't on the rig, so build() logs/errs if a pool is short.
+//   - minimum default (legacy peripheral):  ~5.7 KB need
+//   - full peripheral (perf) / + l2cap:     ~7.6 KB need
+//   - central (+ optional l2cap), 2 links:  ~9.5 KB need
+#[cfg(not(feature = "_full"))]
+const SDC_MEM: usize = 6144;
+#[cfg(all(feature = "_full", not(feature = "central")))]
+const SDC_MEM: usize = 9216;
+#[cfg(feature = "central")]
+const SDC_MEM: usize = 12288;
 
 fn io_capability_from_c(capability: u8) -> IoCapabilities {
     match capability {
@@ -85,26 +86,27 @@ fn build_sdc<'d, const N: usize>(
     mpsl: &'d MultiprotocolServiceLayer,
     mem: &'d mut sdc::Mem<N>,
 ) -> Result<nrf_sdc::SoftdeviceController<'d>, nrf_sdc::Error> {
-    // The lean variant hard-disables the heavy optional features at compile time
-    // so its controller fits the smaller SDC_MEM pool (see above).
-    #[cfg(not(feature = "lean"))]
+    // The minimum default build hard-disables the heavy optional features at compile
+    // time so its controller fits the smaller SDC_MEM pool (see above). The `_full`
+    // builds (perf/central/l2cap) keep them, gated at runtime by config.sdc_disable.
+    #[cfg(feature = "_full")]
     let dis = cfg.sdc_disable;
-    #[cfg(feature = "lean")]
+    #[cfg(not(feature = "_full"))]
     let dis = cfg.sdc_disable
         | crate::SDC_DISABLE_CODED_PHY
         | crate::SDC_DISABLE_SUBRATING
         | crate::SDC_DISABLE_FRAME_SPACE;
 
     // A feature the app actually configures is kept regardless of the disable mask.
-    #[cfg(not(feature = "lean"))]
+    #[cfg(feature = "_full")]
     let want_ext_adv = cfg.adv_extended != 0
         || cfg.periodic_adv != 0
         || (dis & crate::SDC_DISABLE_EXT_ADV) == 0;
-    #[cfg(not(feature = "lean"))]
+    #[cfg(feature = "_full")]
     let want_periodic = cfg.periodic_adv != 0 || (dis & crate::SDC_DISABLE_PERIODIC_ADV) == 0;
-    #[cfg(feature = "lean")]
+    #[cfg(not(feature = "_full"))]
     let want_ext_adv = false;
-    #[cfg(feature = "lean")]
+    #[cfg(not(feature = "_full"))]
     let want_periodic = false;
 
     let mut b = sdc::Builder::new()?.support_adv().support_peripheral();
@@ -127,9 +129,9 @@ fn build_sdc<'d, const N: usize>(
     if (dis & crate::SDC_DISABLE_FRAME_SPACE) == 0 {
         b = b.support_frame_space_update_peripheral();
     }
-    // The lean variant drops the LE extended feature-set exchange too (a basic
+    // The minimum default drops the LE extended feature-set exchange too (a basic
     // peripheral does not need it); keep it in the full builds.
-    #[cfg(not(feature = "lean"))]
+    #[cfg(feature = "_full")]
     {
         b = b.support_extended_feature_set();
     }

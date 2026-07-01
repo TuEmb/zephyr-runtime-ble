@@ -168,29 +168,35 @@ values, and `CONFIG_RUNTIME_BLE_THREAD_STACK_SIZE` / `_PRIORITY` in
 ## Optimizing RAM
 
 A loaded session is heap-allocated and **fully freed on `runtime_ble_unload()`**,
-so it costs ~no RAM until loaded. The loaded footprint has three big parts: the
-**dynamic thread stack**, the **SoftDevice Controller pool**, and the host/server
-state. Three knobs trade features for RAM (all measured on nRF54L15, custom-GATT
-peripheral, via `CONFIG_SYS_HEAP_RUNTIME_STATS` around load):
+so it costs ~no RAM until loaded. **The default build is minimum RAM** — a
+legacy-advertising peripheral + GATT server with small buffers — and you opt into
+more only when you need it. The loaded footprint has three big parts: the **dynamic
+thread stack**, the **SoftDevice Controller pool**, and the host/server state.
+
+Measured on nRF54L15 (custom-GATT peripheral, `CONFIG_SYS_HEAP_RUNTIME_STATS`
+around load):
 
 | Configuration | Heap used on load |
 |---|---|
-| Peripheral, default lib, 32 KB stack | ~57.8 KB |
-| Peripheral, **`CONFIG_RUNTIME_BLE_LEAN=y`** | ~44.5 KB |
-| Peripheral, lean + `CONFIG_RUNTIME_BLE_THREAD_STACK_SIZE=24576` | ~36.5 KB |
-| Dual (server + client), default, 64 KB stack | ~95 KB |
+| **Default (minimum)** — legacy adv, 128-byte values, 20 KB stack | **~30.7 KB** |
+| `CONFIG_RUNTIME_BLE_PERF=y` — full features, 244-byte values, 32 KB stack | ~47.5 KB |
+| `CONFIG_RUNTIME_BLE_CENTRAL=y` (GATT client) | ~48 KB |
+| Dual (server + client), 64 KB stack | ~95 KB |
 
-1. **`CONFIG_RUNTIME_BLE_THREAD_STACK_SIZE`** — the single largest part. Default
-   32768; the tested floor is ~24576. Each 1 KB off the stack is 1 KB off the heap.
-2. **`CONFIG_RUNTIME_BLE_LEAN=y`** — links the peripheral-only lean staticlib:
-   extended/periodic advertising, Coded PHY, subrating, frame-space update and the
-   LE extended feature set are compiled out, and the controller pool is right-sized
-   (~6 KB vs ~18 KB). Best for legacy-advertising peripherals / beacons. Not for
-   central/L2CAP builds.
-3. **`config.sdc_disable`** (runtime bitmask, `RUNTIME_BLE_SDC_DISABLE_*`) — trims
-   the controller's *active* feature set without switching libs. Useful for power/
-   interop, but note the pool is reserved at compile time, so it does not shrink the
-   heap the way the lean lib does.
+Opt into performance / capability as needed:
+1. **`CONFIG_RUNTIME_BLE_PERF=y`** — the full peripheral lib: extended/periodic
+   advertising, Coded PHY, subrating, frame-space, LE extended features, 251-byte
+   buffers, 244-byte characteristic values, 64-entry attribute table. Use it for
+   throughput / big GATT / advanced advertising. (central/l2cap already include
+   the full feature set.)
+2. **`CONFIG_RUNTIME_BLE_THREAD_STACK_SIZE`** — the largest single part. Defaults
+   to 20480 on the minimum build (measured ~15 KB high-water) and 32768 on the
+   full builds. Raise it for heavy on-thread work (pairing, big notifications,
+   significant callbacks); each 1 KB is 1 KB of heap.
+3. **`config.sdc_disable`** (runtime bitmask, `RUNTIME_BLE_SDC_DISABLE_*`) — on the
+   full builds, trims the *active* controller features without switching libs
+   (power / interop). The pool is compile-time, so unlike PERF↔default it does not
+   resize the heap.
 
 The library logs `"[runtime-ble] sdc mem: need <n> have <pool>"` at load (via your
 `on_log`), so you can see the controller's exact memory need and right-size a custom

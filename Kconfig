@@ -16,25 +16,28 @@ menuconfig RUNTIME_BLE
 	  and CONFIG_MPSL=n (enforced by `depends on !BT`). Runtime state is
 	  heap-allocated on runtime_ble_load() and freed on runtime_ble_unload(), so
 	  it costs ~no RAM until loaded. Set CONFIG_HEAP_MEM_POOL_SIZE large enough to
-	  hold one session (~40 KB incl. the dynamic thread stack), and select the
-	  dynamic-stack-from-heap strategy with CONFIG_DYNAMIC_THREAD_PREFER_ALLOC=y
-	  (a choice symbol, so it must be set in the application prj.conf).
+	  hold one session (the minimum default build is ~28 KB incl. the dynamic thread
+	  stack; the perf/central builds are larger), and select the dynamic-stack-from-
+	  heap strategy with CONFIG_DYNAMIC_THREAD_PREFER_ALLOC=y (a choice symbol, so it
+	  must be set in the application prj.conf).
 
 if RUNTIME_BLE
 
 config RUNTIME_BLE_THREAD_STACK_SIZE
 	int "BLE runtime thread stack size (bytes)"
-	default 20480 if RUNTIME_BLE_LEAN
-	default 32768
+	default 32768 if RUNTIME_BLE_PERF
+	default 32768 if RUNTIME_BLE_CENTRAL
+	default 32768 if RUNTIME_BLE_L2CAP
+	default 20480
 	range 16384 65536
 	help
 	  Dynamic stack (k_thread_stack_alloc) for the thread that runs the trouble
 	  async host. Steady-state high-water is ~14 KB, but the MPSL/SDC C-library
-	  init transient is deeper: on the full builds 32768 is reliable and 24576 is
-	  the tested minimum. The lean build has a smaller controller init, so its
-	  measured high-water is ~15 KB (HW, advertising + a connection) and it
-	  defaults to 20480 — bump it if you do deep work on this thread (heavy
-	  pairing, large notifications, or significant app callbacks).
+	  init transient is deeper. The minimum default build has a smaller controller
+	  init, so its measured high-water is ~15 KB (HW, advertising + a connection)
+	  and it defaults to 20480; the full builds (perf/central/l2cap) default to
+	  32768 (24576 is the tested minimum there). Raise it if you do deep work on
+	  this thread (heavy pairing, large notifications, significant app callbacks).
 	  Allocated from the heap on load, freed on unload.
 
 config RUNTIME_BLE_THREAD_PRIORITY
@@ -70,22 +73,23 @@ config RUNTIME_BLE_L2CAP
 	  that opens channels. The matching staticlib must exist for the target
 	  chip — build it with the `l2cap` Cargo feature (see rust/README.md).
 
-config RUNTIME_BLE_LEAN
-	bool "Use the lean (slim controller) prebuilt staticlib"
+config RUNTIME_BLE_PERF
+	bool "Full-featured peripheral (large buffers + all advertising modes)"
 	default n
 	depends on !RUNTIME_BLE_CENTRAL && !RUNTIME_BLE_L2CAP
 	help
-	  Links the lean prebuilt staticlib (lib/<chip>/libruntime_ble_lean.a): a
-	  peripheral-only build with the heavy optional SoftDevice Controller features
-	  compiled out (extended + periodic advertising, Coded PHY, connection
-	  subrating, frame-space update) and a smaller controller memory pool. Use it
-	  for legacy-advertising peripherals / beacons that never need those features,
-	  to cut controller RAM (and a little flash).
+	  Links the full peripheral staticlib (lib/<chip>/libruntime_ble_perf.a) instead
+	  of the minimum default. It restores the heavy optional SoftDevice Controller
+	  features (extended + periodic advertising, Coded PHY, connection subrating,
+	  frame-space update, LE extended feature set), the large 251-byte ATT/L2CAP
+	  buffers, the 244-byte characteristic value length and the 64-entry attribute
+	  table — at the cost of ~20 KB more RAM.
 
-	  Peripheral-only: incompatible with CONFIG_RUNTIME_BLE_CENTRAL and
-	  CONFIG_RUNTIME_BLE_L2CAP. For finer, per-app control without switching libs,
-	  use the runtime config.sdc_disable bitmask instead. The matching staticlib
-	  must exist for the target chip — build it with the `lean` Cargo feature
-	  (see rust/README.md).
+	  Leave it OFF (the default) for minimum RAM: a legacy-advertising peripheral +
+	  GATT server with small buffers (128-byte values, 32-entry table), which is
+	  enough for most sensors/beacons. central/l2cap builds already include the full
+	  feature set, so this option is peripheral-only. The matching staticlib must
+	  exist for the target chip — build it with the `perf` Cargo feature (see
+	  rust/README.md).
 
 endif # RUNTIME_BLE

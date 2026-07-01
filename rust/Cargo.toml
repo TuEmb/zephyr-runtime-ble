@@ -34,15 +34,19 @@ embassy-time-queue-utils = { version = "0.3", optional = true }
 critical-section = { version = "1.2", optional = true }
 
 [features]
+# The DEFAULT build is MINIMUM RAM: a legacy-advertising peripheral + GATT server
+# with the heavy optional controller features off, small SDC pool, small MTU /
+# value length / attribute table. Opt into more via the features below (each
+# pulls the internal `_full` umbrella that restores the large buffers + the full
+# advertising feature set) — and changes the staged lib filename.
 default = []
-# Optional roles, baked into the staticlib at build time (the SDC role support is
-# a compile-time choice). Off by default so the default lib is the lean
-# peripheral + GATT-server build; enabling one changes the staged lib filename
-# (e.g. `--features nrf54l15,central` -> stage as libruntime_ble_central.a).
-central = []   # scan/connect + GATT client (RUNTIME_BLE_ROLE_CENTRAL)
-l2cap = []     # L2CAP connection-oriented channels (config.l2cap_psm)
-lean = []      # peripheral-only: drop ext/periodic/coded/subrating/frame-space +
-               # shrink the SDC memory pool (RUNTIME_BLE_LEAN). Not for central/l2cap.
+central = ["_full"]  # scan/connect + GATT client (RUNTIME_BLE_ROLE_CENTRAL)
+l2cap = ["_full"]    # L2CAP connection-oriented channels (config.l2cap_psm)
+perf = ["_full"]     # full-featured peripheral: ext/periodic/coded adv, subrating,
+                     # frame-space, large MTU + value length (RUNTIME_BLE_PERF)
+# Internal umbrella (do not select directly): full buffers + advertising feature
+# set. Enabled by central/l2cap/perf; absent = the minimum default build.
+_full = []
 # Common radio dependencies, shared by every chip feature below.
 _radio = [
     "dep:embassy-executor",

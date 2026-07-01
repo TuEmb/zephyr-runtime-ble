@@ -74,24 +74,27 @@ via the module's `CMakeLists.txt`.
 
 ## Role variants (optional)
 
-The default lib is the **peripheral + GATT-server** build. Extra roles are
-compile-time Cargo features, baked into a separate lib whose filename encodes the
-roles — `CMakeLists.txt` selects it from the matching `CONFIG_RUNTIME_BLE_*`:
+The default lib is the **minimum-RAM peripheral + GATT-server** build (legacy
+advertising, small buffers). Extra capability / performance is opt-in via
+compile-time Cargo features, each baked into a separate lib whose filename encodes
+it — `CMakeLists.txt` selects it from the matching `CONFIG_RUNTIME_BLE_*`:
 
 | Cargo features | Staged as | Selected by |
 |---|---|---|
-| (none) | `libruntime_ble.a` | default |
+| (none) | `libruntime_ble.a` | default (minimum RAM) |
+| `perf` | `libruntime_ble_perf.a` | `CONFIG_RUNTIME_BLE_PERF=y` |
 | `central` | `libruntime_ble_central.a` | `CONFIG_RUNTIME_BLE_CENTRAL=y` |
 | `l2cap` | `libruntime_ble_l2cap.a` | `CONFIG_RUNTIME_BLE_L2CAP=y` |
 | `central,l2cap` | `libruntime_ble_central_l2cap.a` | both of the above |
-| `lean` | `libruntime_ble_lean.a` | `CONFIG_RUNTIME_BLE_LEAN=y` |
 
-The `central`/`l2cap` filename suffix is `_central` then `_l2cap`, in that order
-(matching `CMakeLists.txt`). `lean` is a standalone **peripheral-only** slim build
-(extended/periodic advertising, Coded PHY, subrating and frame-space update
-compiled out + a smaller SDC memory pool); it is not combined with `central`/
-`l2cap`. For per-app control without switching libs, use the runtime
-`config.sdc_disable` bitmask instead (see `include/runtime_ble.h`).
+`central`/`l2cap`/`perf` each pull the internal `_full` umbrella feature, which
+restores the large 251-byte buffers, 244-byte characteristic values, 64-entry
+attribute table and the full advertising feature set (extended/periodic adv, Coded
+PHY, subrating, frame-space). Without them, the default build is minimum: legacy
+adv only, 128-byte values, 32-entry table, right-sized SDC pool. `perf` is a
+standalone **peripheral-only** full build (not combined with central/l2cap). For
+per-app trimming of the *active* controller features without switching libs, use
+the runtime `config.sdc_disable` bitmask (see `include/runtime_ble.h`).
 
 Add the feature to the build and stage under the matching name, e.g. on Linux:
 ```sh

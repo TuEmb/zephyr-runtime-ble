@@ -165,8 +165,17 @@ pub extern "C" fn runtime_alarm_fired() {
 // fixed VALUE_LEN byte buffer (heap), so the layout is decided at load time from
 // the C config rather than by a compile-time macro.
 // ---------------------------------------------------------------------------
+// Per-characteristic value buffer + attribute-table capacity. The minimum build
+// trims both (small GATT, small MTU); `_full` (perf/central/l2cap) restores the
+// large values + table for big characteristics / many attributes.
+#[cfg(feature = "_full")]
 pub(crate) const VALUE_LEN: usize = 244;
+#[cfg(not(feature = "_full"))]
+pub(crate) const VALUE_LEN: usize = 128;
+#[cfg(feature = "_full")]
 const ATT_MAX: usize = 64;
+#[cfg(not(feature = "_full"))]
+const ATT_MAX: usize = 32;
 const BOND_BLOB_LEN: usize = 53;
 const BOND_BLOB_VERSION: u8 = 2;
 const BOND_BLOB_VERSION_LEGACY: u8 = 1;

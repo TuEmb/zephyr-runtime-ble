@@ -30,13 +30,13 @@ else()
                       "Add a chip module in rust/src/chip/ and build lib/<chip>/libruntime_ble.a.")
 endif()
 
-# Select the staticlib variant for the enabled roles. The filename encodes the
-# extra (non-default) roles compiled into it; the default is peripheral + server.
-# The lean variant is a peripheral-only slim build (no central/l2cap), so it is a
-# standalone variant rather than a suffix combined with the others.
+# Select the staticlib variant. The DEFAULT (no suffix) is the minimum-RAM
+# peripheral + GATT server. CONFIG_RUNTIME_BLE_PERF selects the full peripheral
+# (large buffers + all advertising modes); central/l2cap add their roles (and the
+# full feature set). perf is peripheral-only, so it is a standalone variant.
 set(RTBLE_VARIANT "")
-if(CONFIG_RUNTIME_BLE_LEAN)
-  set(RTBLE_VARIANT "_lean")
+if(CONFIG_RUNTIME_BLE_PERF)
+  set(RTBLE_VARIANT "_perf")
 else()
   if(CONFIG_RUNTIME_BLE_CENTRAL)
     string(APPEND RTBLE_VARIANT "_central")
