@@ -1,0 +1,7 @@
+# Trim the trouble host packet pool from its default 16 buffers to 8. The pool is
+# a `static` (.bss), shared by ACL/ATT/L2CAP; 8 is ample for the 1-2 links this
+# runtime supports and saves ~2 KB of always-resident RAM across every variant.
+# MTU is left at the default (251) so the full/perf builds keep large ATT/L2CAP
+# transfers. trouble-host reads this at build time (embassy-style build.rs config).
+[env]
+TROUBLE_HOST_DEFAULT_PACKET_POOL_SIZE = "8"
